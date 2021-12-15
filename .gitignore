@@ -1,0 +1,34 @@
+# Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+
+# OS / editors
+Thumbs.db
+.DS_Store
+desktop.ini
+~$*
+~WRL*.tmp
+.idea/
+.vscode/
+
+# Airflow runtime
+airflow.db
+airflow-webserver.pid
+logs/
+
+# Learner artifacts
+learner/upstream/
+learner/output-*/
+*.ckpt*
+checkpoint

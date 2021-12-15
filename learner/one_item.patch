@@ -1,0 +1,2671 @@
+diff -urN a/analyze-spaced-repetition.py b/analyze-spaced-repetition.py
+--- a/analyze-spaced-repetition.py
++++ b/analyze-spaced-repetition.py
+@@ -13,11 +13,12 @@
+ sns.despine()
+ 
+ import matplotlib.pyplot as plt
++import math
+ 
+ import click
+ import os
+ import numpy as np
+-import tpprl.exp_teacher as ET
++import tpprl.exp_teacher_save as ET
+ from tpprl.utils import _now
+ import tensorflow as tf
+ from tpprl.plot_utils import latexify, format_axes
+@@ -31,7 +32,7 @@
+ @click.option('--T', 'T', help='The learning duration (in days).', default=14, show_default=True)
+ @click.option('--tau', 'tau', help='Delay before the test.', default=2, show_default=True)
+ @click.option('--only-cpu/--no-only-cpu', 'only_cpu', help='Whether to use only the CPU during evaluation.', default=True, show_default=True)
+-@click.option('--batches', 'batches', help='How many test batches to sample results from.', default=100, show_default=True)
++@click.option('--batches', 'batches', help='How many test batches to sample results from.', default=12, show_default=True)
+ @click.option('--verbose/--no-verbose', 'verbose', help='Produce verbose output.', default=True, show_default=True)
+ def cmd(initial_difficulty_csv, alpha, beta, save_dir, T, tau, only_cpu, batches, verbose):
+     """Read the initial difficulty of items from INITIAL_DIFFICULTY_CSV, use
+@@ -68,7 +69,7 @@
+         summary_dir=summary_dir,
+         learning_rate=0.02,
+         decay_rate=0.02,
+-        batch_size=32,
++        batch_size=28,
+         q=0.0001,
+         q_entropy=0.002,
+         learning_bump=1.0,
+@@ -99,10 +100,62 @@
+ 
+     # Evaluating the performance of RL.
+     _f_d, RL_test_scens = ET.get_test_feed_dicts(teacher, range(init_seed, init_seed + batches))
+-    RL_rewards = [s.reward() for s in RL_test_scens]
++    RL_rewards = [s.work_recalls() for s in RL_test_scens]
+ 
+-    num_test_reviews = np.mean([x.get_num_events() for x in RL_test_scens])
++    #########################
++    ##### Test Printing #####
++    #########################
++
++    geta_ts = [s.get_ts() for s in RL_test_scens]
++
++    geta_ts_len = [len(s.get_ts()) for s in RL_test_scens]
++
++    print(geta_ts, geta_ts_len)
++
++    geta_recalls = [s.get_recalls() for s in RL_test_scens]
++    # geta_recalls_len = [len(s.get_recalls()) for s in RL_test_scens]
++
++    geta_recall_deltas = [s.get_recall_deltas() for s in RL_test_scens]
++    # geta_recall_deltas_len = [len(s.get_recall_deltas()) for s in RL_test_scens]
++
++    print("geta_recalls:", geta_recalls)
++    # print("geta_recalls_len:", geta_recalls_len)
++    print("geta_recall_deltas:", geta_recall_deltas)
++    # print("geta_recall_deltas_len:", geta_recall_deltas_len)
++
++    # geta_deltas = [s.get_time_deltas() for s in RL_test_scens]
++    #geta_deltas_len = [len(s.get_time_deltas()) for s in RL_test_scens]
++
++    # print("geta_deltas", geta_deltas)
++    #print("geta_deltas_len", geta_deltas_len)
+ 
++    ########################
++    ##### Produce Plot #####
++    ########################
++
++    geta_dims_0 = np.zeros((len(geta_ts[0]),), dtype=int)
++    geta_dims_1 = np.subtract(np.zeros((len(geta_ts[1]),), dtype=int), 0.5)
++    geta_dims_2 = np.subtract(np.zeros((len(geta_ts[2]),), dtype=int), 1.0)
++
++    plt.switch_backend('TkAgg')
++
++    def h(t):
++        # return np.random.normal(3, 1, t/t)
++        #return np.sqrt(t)
++        #return np.heaviside(t,1) + np.heaviside(t-3,1) + np.heaviside(t-6,1) + np.heaviside(t-9,1) + np.heaviside(t-12,1)
++        return 3*np.heaviside(t,1) - 2*np.heaviside(t-3,1) + np.heaviside(t-4,1) + 3*np.heaviside(t-6,1) - np.heaviside(t-7,1) - 2*np.heaviside(t-9,1) - 2*np.heaviside(t-10,1) + 3*np.heaviside(t-11,1) + np.heaviside(t-12,1)
++
++    t1 = np.arange(0.0, 14.0, 0.01)
++
++    plt.plot(geta_ts[0], geta_dims_0, 'ro', geta_ts[1], geta_dims_1, 'bo', geta_ts[2], geta_dims_2, 'go', t1, h(t1), 'k-')
++    #plt.plot(geta_ts[0], geta_dims_0, 'ro', t1, h(t1), 'k-')
++    plt.axis([0, 14, -1.25, 6])
++    plt.show()
++    #plt.close()
++
++    """
++    num_test_reviews = np.mean([x.get_num_events() for x in RL_test_scens])
++    
+     # Performance using uniform baseline
+     rets_unif = [
+         ET.uniform_random_baseline(
+@@ -112,7 +165,7 @@
+     ]
+ 
+     # Performance if using Memorize.
+-    q_MEM = ET.sweep_memorize_q(scenario_opts, num_test_reviews, q_init=1.0,
++    q_MEM = ET.sweep_memorize_q(scenario_opts, 100, q_init=1.0,
+                                 verbose=verbose)
+ 
+     rets_mem = [
+@@ -230,7 +283,7 @@
+     # plt.legend(ncol=2, bbox_to_anchor=(0, 0, 1, 1.1))
+     plt.tight_layout()
+     plt.savefig(os.path.join(plot_base, 'reviews-every-day.pdf'), bbox_inches='tight', pad_inches=0)
+-
++    """
+     print(_now(), 'Done.')
+ 
+ 
+diff -urN a/data/initial_difficulty.csv b/data/initial_difficulty.csv
+--- a/data/initial_difficulty.csv
++++ b/data/initial_difficulty.csv
+@@ -1 +1 @@
+-1.32676072, 0.91585713, 0.32710527, 1.35254031, 0.3810604 , 1.4500437 , 1.5252185 , 1.64730431, 1.35162522, 0.42185575, 0.76951055, 0.52897342, 1.58155648, 0.99592211, 1.06781652, 0.8468054 , 1.7871302 , 1.19360336, 1.04749509, 1.2631397 , 1.79584184, 1.30583412, 0.86247382, 1.11760698, 1.41102689, 0.88691149, 1.61527041, 1.10915072, 1.04512645, 0.90287819, 0.4031563 , 0.74693031, 2.45442748, 0.54059586, 0.68117486, 0.46392566, 1.13850474, 0.43087849, 1.5951335 , 1.61460361, 2.17658159, 0.78491709, 0.94356247, 0.48563803, 0.78059192, 0.57989391, 0.69150531, 0.8065423 , 2.28143939, 1.40548438
++1.9310604
+\ No newline at end of file
+Binary files upstream-tpprl/output-plots/algo-avg-rank.pdf and one_item_src/output-plots/algo-avg-rank.pdf differ
+Binary files upstream-tpprl/output-plots/algo-top-1.pdf and one_item_src/output-plots/algo-top-1.pdf differ
+Binary files upstream-tpprl/output-plots/item-difficulty.pdf and one_item_src/output-plots/item-difficulty.pdf differ
+Binary files upstream-tpprl/output-plots/recall-results-14-2.pdf and one_item_src/output-plots/recall-results-14-2.pdf differ
+Binary files upstream-tpprl/output-plots/reviews-every-day.pdf and one_item_src/output-plots/reviews-every-day.pdf differ
+diff -urN a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -61,8 +61,7 @@
+ This script is used for running the Spaced Repetition experiment:
+ 
+     mkdir -p output-spaced-repetition;
+-    python train-teaching.py ./data/initial-difficulty.csv 0.049 0.0052 ./output-spaced-repetition \
+-        --q 0.0001 --q-entropy 0.005
++    python train-teaching.py ./data/initial_difficulty.csv 0.049 0.0052 ./output-spaced-repetition --q 0.0001 --q-entropy 0.005
+ 
+ 
+ If the training gets stuck on 0 reward, then training an initial version `--with-recall-probs` as reward instead of binary reward, and/or increasing the `batch_size` may help.
+diff -urN a/tpprl/cells.py b/tpprl/cells.py
+--- a/tpprl/cells.py
++++ b/tpprl/cells.py
+@@ -317,6 +317,9 @@
+     """u(t) = exp(vt * ht + wt * dt + bt).
+     v(t) = softmax(Vy * ht)
+ 
++    # tf.contrib.rnn.RNNCell
++    # tf.contrib.rnn.BasicLSTMCell
++
+     Stacked version.
+     """
+ 
+diff -urN a/tpprl/exp_teacher.py b/tpprl/exp_teacher.py
+--- a/tpprl/exp_teacher.py
++++ b/tpprl/exp_teacher.py
+@@ -6,28 +6,41 @@
+ import multiprocessing as MP
+ import redqueen.utils as RU
+ import heapq
++import math
+ 
+ SAVE_DIR = 'teacher-log'
+-MAX_EVENTS = 100000
++MAX_EVENTS = 200
+ REWARD_SCALING = 100
+ 
+ # DEBUG ONLY
+ try:
+     from .utils import variable_summaries, _now
+     from .cells import TPPRExpMarkedCellStacked
++    """custom-designed RNN (LSTM?) Cell"""
+     from .exp_sampler import ExpCDFSampler
++    """exponential sampler for intensity"""
+ except ModuleNotFoundError:
+     warnings.warn('Could not import local modules. Assuming they have been loaded using %run -i')
+ 
+-
+ def softmax(x):
+     e_x = np.exp(x - x.max())
+     return e_x / e_x.sum()
++""" Multinomial Probability/Softmax Distribution for MTPP mark distribution: """
+ 
++####################################
++####################################
++""" Probabilistic Student Model: """
++####################################
++####################################
+ 
+ class Student:
+     def __init__(self, n_0s, alphas, betas, seed):
+         """n_0 is the initial expertise in all items."""
++        """ -> n_0s is the tuple of all initial item expertises """
++
++        """the dimension of the vector of initial item expertises, and thus the number of different items, 
++        depends on the number of entries/columns in the file initial_difficulty.csv  """
++
+         self.ns = np.asarray([x for x in n_0s])
+         self.alphas = alphas
+         self.betas = betas
+@@ -36,9 +49,19 @@
+         self.RS = np.random.RandomState(seed)
+         self.int_m1_sq = 0
+ 
++    #######################################################
++    """Update of the loss function and forgetting rate: """  
++    #######################################################
++
+     def review(self, item, cur_time):
+         recall = self.recall(item, cur_time)
+         n_i = self.ns[item]
++        """-> n_i is the forgetting rate of the item from array of forgetting rates n_s"""
++
++        # This definition must somehow be based on the loss function as defined in the Paper 
++        # "Optimizing Human Learning" S. 5 und 6 jeweils unten 
++
++        # But, maybe different (empirical) loss function implemented here ...???
+ 
+         # Calculate the (1 - m(t))^2 loss of the past interval.
+         t_delta = cur_time - self.last_review_times[item]
+@@ -52,8 +75,7 @@
+         #     0.5 * np.exp(-2.0 * n_i * t_delta) -
+         #     1.5
+         # ))
+-        self.int_m1_sq  += x
+-
++       
+         if recall:
+             n_new = n_i * (1 - self.alphas[item])
+         else:
+@@ -65,6 +87,8 @@
+ 
+         return recall
+ 
++    """Probably only used in the "memory" algorithm and not our application"""
++
+     def get_m1_sq(self, episode_end_time):
+         m1 = self.int_m1_sq
+         for item in range(len(self.ns)):
+@@ -77,13 +101,28 @@
+             )
+         return m1
+ 
+-    def recall(self, item, t):
+-        m_t = self.prob_recall(item, t)
+-        return self.RS.rand() < m_t
+-
+-    def prob_recall(self, item, t):
+-        return np.exp(-(self.ns[item] * (t - self.last_review_times[item])))
++    #############################
++    """ Recall (Probability): """
++    #############################
++    """for the item at time t"""
+ 
++    """artificially created recall function that represent relevant processess for our application"""
++    def recall(self, item, t):
++        # m_t = np.heaviside(t,1) + np.heaviside(t-3,1) + np.heaviside(t-6,1) + np.heaviside(t-9,1) + np.heaviside(t-12,1)
++        m_t = math.sqrt(t)
++        #m_t = np.random.normal(3, 1)
++        # m_t = 3*np.heaviside(t,1) - 2*np.heaviside(t-3,1) + np.heaviside(t-4,1) + 3*np.heaviside(t-6,1) - np.heaviside(t-7,1) - 2*np.heaviside(t-9,1) - 2*np.heaviside(t-10,1) + 3*np.heaviside(t-11,1) + np.heaviside(t-12,1)
++        return m_t
++
++    """def prob_recall(self, item, t):
++        return np.exp(-(self.ns[item] * (t - self.last_review_times[item])))"""
++        # This is the recall probability of the student model as defined in the 
++        # Paper "Deep Reinforcement Learning of Marked Temporal Point Processes"
++        # in Appendix E - Student Model on S. 18
++
++######################################################################################################################################
++"""the following function populates the Student() class with hyperparameter values form scenario_opts defined in train-teaching.py """   
++######################################################################################################################################
+ 
+ def mk_standard_student(scenario_opts, seed):
+     alphas = scenario_opts['alphas']
+@@ -91,6 +130,15 @@
+     n_0s = scenario_opts['n_0s']
+     return Student(n_0s, alphas, betas, seed)
+ 
++    """scenario_opts will be filled in in train-teaching.py"""
++
++###############################################################
++""" PARAMETERIZATION:   Definition of MTPPs as RMTPPs in RL """
++###############################################################
++
++"""The class Scenario defines everything needed to run each reviewing sequences and model it as RNN."""
++"""REMEMBER: The SGD computes the average gradient for one batch over all gradients of the reviewing sequence 
++    and then trains the trainable paramters over epochs of batches"""
+ 
+ class Scenario:
+     def __init__(self, scenario_opts, seed,
+@@ -101,11 +149,20 @@
+         self.student = mk_standard_student(scenario_opts, seed=seed * 2)
+ 
+         self.Wm = Wm
++        """weight for the item mark (which item) in the MTPP of the teacher"""
+         self.Wh = Wh
++        """weight for the recurrent hidden layer output in the hidden layer"""
+         self.Wr = Wr
++        """weight for the recall mark (yes/no) in the MTPP of the student"""
+         self.Wt = Wt
++        """weight for the time influence in the hiddden layer"""
+         self.Bh = Bh
++        """bias in the hidden layer"""
+         self.Vy = Vy
++        """weight for the hidden layer output in the mark probability distribution"""
++
++        """Parameter Name difference wrt Paper:"""
++        """ Bh <= bh, Wm <= Wy, Wr <= Wz """
+ 
+         self._init = False
+         self.cur_h = init_h
+@@ -113,24 +170,48 @@
+         self.default_tau = scenario_opts['tau']
+         self.RS = np.random.RandomState(seed)
+         self.last_time = -1
+-
++        
++        self.recall = -1
++                
+         self.c_is = []
+         self.hidden_states = []
+         self.time_deltas = []
++        self.ts = []
+         self.recalls = []
++        self.recall_deltas = []
+         self._recall_probs = []
+         self.items = []
+         self.item_probs = []
+ 
++        ############################
++        """ Exponential Sampler: """
++        ############################
++        # This is the exponential sampler ExpCDFSampler imported from exp_sampler.py
++        # In exp_sampler.py only the code until line 153 is relevant to us
++        # This sampler samples from the intensity function, but as defined in the Paper
++        # "Recurrent Marked Temporal Point Processes: Embedding Event History to Vector"
++        # S. 5 mitte
++        # There, the parameters are called differently (s.u)
++        """ bt <= b_lambda, vt <= V_lambda """ 
++
+         self.exp_sampler = ExpCDFSampler(wt=wt, vt=vt, bt=bt, init_h=init_h,
+                                          t_min=0,
+                                          seed=seed + 1)
+ 
++    #####################################################################
++    """Next, are some get_functions() which are all accessed in the get_feed_dict() """
++    #####################################################################
++
+     def get_m1_sq(self):
+         """Calculates the (1 - m)^2 reward for this scenario."""
+         assert self._init
+         return self.student.get_m1_sq(self.T)
+ 
++    ################################################
++    """ Access all c_is from exponential sampler """
++    ################################################
++    """ in exp_sampler.py, notationally, c = vt * hi + bt, is the weighted + unbiased history effect in the intensity"""
++
+     def get_all_c_is(self):
+         assert self._init
+         return np.asarray(self.c_is + [self.exp_sampler.c])
+@@ -139,6 +220,14 @@
+         assert self._init
+         return self.T - self.last_time
+ 
++    def get_ts(self):
++        assert self._init
++        return np.asarray(self.ts)
++
++    def get_time_deltas(self):
++        assert self._init
++        return np.asarray(self.time_deltas)
++
+     def get_all_time_deltas(self):
+         assert self._init
+         return np.asarray(self.time_deltas +
+@@ -160,9 +249,37 @@
+         assert self._init
+         return self.recalls
+ 
++    ######################################
++    """Input for Reward Function for our application"""
++    ######################################
++
++    def get_recall_deltas(self):
++        assert self._init
++        return self.recall_deltas
++    
++    ######################################
++    """Reward Function for our application"""
++    ######################################
++
++    def work_recalls(self):
++  
++        of_recalls = np.sum(np.sqrt(np.absolute(np.divide(self.recall_deltas, 4))))/math.sqrt(len(self.recall_deltas)+1)
++           
++        """(...)"""       
++
++        return of_recalls
++    
++    ######################################
++    """ Hidden State Updating Function """
++    ######################################
++    # This is the hidden state equation as defined in the 
++    # Paper "Deep Reinforcement Learning of Marked Temporal Point Processes" on S. 5
++    # There, the parameters are called differently (s.u)
++    """ Bh <= bh, Wm <= Wy, Wr <= Wz """
++
+     def update_hidden_state(self, item, t, time_delta):
+         """Returns the hidden state after a post by src_id and time delta."""
+-        self._recall_probs.append(self.student.prob_recall(item, t))
++        #self._recall_probs.append(self.student.prob_recall(item, t))
+         recall = float(self.student.review(item, t))
+         self.recalls.append(recall)
+ 
+@@ -174,11 +291,22 @@
+             self.Bh
+         )
+ 
++    ############################################
++    """ Sample action events from the policy """
++    ############################################
++    """This is the Sampling of events (review times from the intensity and items from softmax) from the policy as described in the Paper"""
++    
+     def generate_sample(self, p):
+         t_next = self.exp_sampler.generate_sample()
+         item_next = self.RS.choice(np.arange(self.num_items), p=p)
+         return (t_next, item_next)
+ 
++    ######################################################
++    """ The Running Mechanism for a reviewing sequence """
++    ######################################################
++    """here, the program simply runs one reviewing session, in which the hidden state is updated
++    AND review times and items are sampled""" 
++
+     def run(self, max_events=None):
+         """Execute a study episode."""
+         assert not self._init
+@@ -189,19 +317,31 @@
+ 
+         idx = 0
+         t = 0
+-
++        last_recall = float(self.student.review(0, 0))
++        
+         p = softmax(self.Vy.T.dot(self.cur_h)).squeeze(axis=-1)
+         self.item_probs.append(p)
+         (t_next, item_next) = self.generate_sample(p)
+ 
++        ### 
++        """here, the running through takes place:"""
++        ###
++
+         while idx < max_events and t_next < self.T:
+             idx += 1
+             time_delta = t_next - t
+ 
++            recall = float(self.student.review(item_next, t_next))
++            recall_delta = recall - last_recall
++            self.recall_deltas.append(recall_delta)
++
++            last_recall = recall
++
+             self.items.append(item_next)
+             self.c_is.append(self.exp_sampler.c)
+             self.hidden_states.append(self.cur_h)
+             self.time_deltas.append(time_delta)
++            self.ts.append(t_next)
+             self.last_time = t
+ 
+             t = t_next
+@@ -215,32 +355,47 @@
+ 
+         return self
+ 
+-    def reward(self, tau=None):
+-        """Returns the result of a test conducted at T + tau."""
+-        if tau is None:
+-            tau = self.default_tau
+-
+-        return np.mean([self.student.recall(item, self.T + tau)
+-                       for item in range(self.num_items)])
+-
++    #######################################
++    """Rewad Function of the Original Application (now redundant)"""
++    #######################################
++
++    # def reward(self, tau=None):
++    #     """Returns the result of a test conducted at T + tau."""
++    #     if tau is None:
++    #         tau = self.default_tau
++
++    #     return np.mean([self.student.recall(item, self.T + tau)
++    #                    for item in range(self.num_items)])
++
++####################################################
++"""Set ALL trainable and hyper parameters """
++####################################################
+ 
+ def mk_def_teacher_opts(hidden_dims, num_items,
+                         scenario_opts, seed=42, **kwargs):
+     """Make default option set."""
+     RS  = np.random.RandomState(seed=seed)
+ 
++        #####################################
++        """Initialize all hyper parameters"""
++        #####################################
++
+     def_exp_recurrent_teacher_opts = Deco.Options(
+         t_min=0,
+         scope=None,
+         decay_steps=100,
+-        decay_rate=0.001,
++        decay_rate=0.01,
+         num_hidden_states=hidden_dims,
+-        learning_rate=.01,
+-        learning_bump=1.0,
++        learning_rate=0.02,
++        learning_bump=1,
+         clip_norm=1.0,
+         tau=15.0,
+ 
+-        Wh=RS.randn(hidden_dims, hidden_dims) * 0.1 + np.diag(np.ones(hidden_dims)),  # Careful initialization
++            #########################################
++            """Initialize all trainable parameters"""
++            #########################################
++
++        Wh=RS.randn(hidden_dims, hidden_dims) * 0.1 + np.diag(np.ones(hidden_dims)), # Careful initialization
+         Wm=RS.randn(num_items, hidden_dims),
+         Wr=RS.randn(hidden_dims, 1),
+         Wt=RS.randn(hidden_dims, 1),
+@@ -252,15 +407,23 @@
+         wt=np.abs(RS.rand(1)) * -1,
+         bt=np.abs(RS.randn(1)),
+ 
++        #########################################
++        """Initialize further hyper parameters"""
++        #########################################
++
+         # The graph execution time depends on this parameter even though each
+         # trajectory may contain much fewer events. So it is wise to set
+         # it such that it is just above the total number of events likely
+         # to be seen.
+         momentum=0.9,
+         max_events=5000,
+-        batch_size=16,
++        batch_size=12,
+         T=100.0,
+ 
++        ##############################
++        """Initialize TF parameters"""
++        ##############################
++
+         device_cpu='/cpu:0',
+         device_gpu='/gpu:0',
+         only_cpu=False,
+@@ -275,7 +438,7 @@
+         # Whether or not to deduct the baseline.
+         with_baseline=True,
+ 
+-        q=0.0005,
++        q=0.005,
+         q_entropy=0.01,
+ 
+         scenario_opts=scenario_opts,
+@@ -285,6 +448,9 @@
+ 
+     return def_exp_recurrent_teacher_opts.set(**kwargs)
+ 
++######################################################################################
++""" OPTIMIZATION (of trainable parameters): Deep RL in RMTPPs TRAINING Formulation """
++######################################################################################
+ 
+ class ExpRecurrentTeacher:
+     @Deco.optioned()
+@@ -341,11 +507,19 @@
+ 
+         var_device = device_cpu if only_cpu else device_gpu
+ 
++        ###########################################
++        """ Set the Training Model in Tensor Flow (TF) """
++        ###########################################
++
+         # self.opt = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
+         with tf.device(device_cpu):
+             # Global step needs to be on the CPU (Why?)
+             self.global_step = tf.Variable(0, name='global_step', trainable=False)
+ 
++        ##############################################################
++        """ Set the hidden-state trainable parameters in TF """
++        ##############################################################
++
+         with tf.variable_scope(self.scope):
+             with tf.variable_scope('hidden_state'):
+                 with tf.device(var_device):
+@@ -367,6 +541,10 @@
+                 self.tf_t_delta = tf.placeholder(name='t_delta', shape=1, dtype=self.tf_dtype)
+                 self.tf_recall = tf.placeholder(name='recall', shape=(1, 1), dtype=self.tf_dtype)
+ 
++                ##############################################
++                """ Define the Hidden Layer Function in TF """
++                ##############################################
++
+                 self.tf_h_next = tf.nn.tanh(
+                     tf.transpose(
+                         tf.nn.embedding_lookup(self.tf_Wm, self.tf_b_idx, name='b_embed')
+@@ -378,6 +556,10 @@
+                     name='h_next'
+                 )
+ 
++            ####################################################
++            """ Define the Parameters of Output Layer/Policy in TF """
++            ####################################################
++
+             with tf.variable_scope('output'):
+                 with tf.device(var_device):
+                     self.tf_Vy = tf.get_variable(name='Vy', shape=Vy.shape,
+@@ -400,6 +582,14 @@
+ 
+             # Create a large dynamic_rnn kind of network which can calculate
+             # the gradients for a given given batch of simulations.
++
++            #######################################################
++            """ Set batch parameters for training in TF """
++            #######################################################
++
++            """These batch variables are set to placeholders here, and later taken from the get_feed_dict() !!!"""
++            #######################################################################################################
++
+             with tf.variable_scope('training'):
+                 self.tf_batch_rewards = tf.placeholder(name='rewards',
+                                                        shape=(self.tf_batch_size, 1),
+@@ -431,6 +621,14 @@
+ 
+                 # Stacked version (for performance)
+ 
++                #####################################
++                """ Build a stacked Model """
++                #####################################
++
++                    #####################################
++                    """ Stack ALL trainable variables """
++                    #####################################
++
+                 with tf.name_scope('stacked'):
+                     with tf.device(var_device):
+                         (self.Wm_mini, self.Wr_mini, self.Wh_mini,
+@@ -450,6 +648,18 @@
+                              )
+                         ]
+ 
++                        #################################################
++                        """ Define a stacked RNN specified by RNNCell """
++                        #################################################
++                        # tf.nn.dynamic_rnn(cell, ...) 
++                        # recurrent neural network with cell is a RNNCell
++                        # here:     tf.nn.dynamic_rnn(rnn_cell_stack, ...) with 
++                        #                   rnn_cell_stack = TPPRExpMarkedCellStacked  
++
++                        ##########################################################################
++                        """ Import a stacked RNNCell/from TPPRExpMarkedCellStacked """
++                        ##########################################################################
++
+                         self.rnn_cell_stack = TPPRExpMarkedCellStacked(
+                             hidden_state_size=(None, self.num_hidden_states),
+                             output_size=[self.num_hidden_states] + [1] * 4,
+@@ -462,6 +672,10 @@
+                             assume_wt_zero=self.set_wt_zero,
+                         )
+ 
++                        ###########################################
++                        """ Define the RNN with the RNNCell """
++                        ###########################################
++
+                         ((self.h_states_stack, LL_log_terms_stack,
+                           LL_int_terms_stack, loss_terms_stack,
+                           entropy_terms_stack),
+@@ -483,6 +697,10 @@
+                         # LL_last_term_stack = rnn_cell.last_LL(tf_batch_h_t_mini, self.tf_batch_last_interval)
+                         # loss_last_term_stack = rnn_cell.last_loss(tf_batch_h_t_mini, self.tf_batch_last_interval)
+ 
++                        #####################################################################
++                        """Is the intensity regularizer computetd here (...) ???"""
++                        #####################################################################
++
+                         self.LL_last_term_stack = self.rnn_cell_stack.last_LL(tf_batch_h_t_mini, self.tf_batch_last_interval)
+                         self.loss_last_term_stack = self.rnn_cell_stack.last_loss(tf_batch_h_t_mini, self.tf_batch_last_interval)
+ 
+@@ -502,6 +720,10 @@
+                             self.q_entropy * self.entropy_stack
+                         )
+ 
++            #######################################################
++            """ These variables defined below appear not to be called/referenced anywhere (...) ??? """
++            #######################################################
++
+             with tf.name_scope('calc_u'):
+                 with tf.device(var_device):
+                     # These are operations needed to calculate u(t) in post-processing.
+@@ -511,6 +733,9 @@
+                     # Otherwise, new additions to the graph were made whenever the
+                     # function calc_u was called.
+ 
++                    """Der Begriff Postprocessing bezeichnet die Nachbearbeitung und Aufbereitung von Ergebnissen einer Computersimulation, wie zum Beispiel einer numerischen Strömungssimulation. 
++                    Man versucht, die dabei entstehenden großen Datenmengen in eine verständliche Darstellungsform umzuwandeln, also z. B. in Grafiken und Animationen. """
++
+                     self.calc_u_h_states = tf.placeholder(
+                         name='calc_u_h_states',
+                         shape=(self.tf_batch_size, self.tf_max_events, self.num_hidden_states),
+@@ -544,13 +769,26 @@
+         self.all_mini_vars = [self.Wh_mini, self.Wm_mini, self.Wt_mini, self.Bh_mini,
+                               self.Wr_mini, self.bt_mini, self.vt_mini, self.wt_mini, self.Vy_mini]
+ 
++        ##########################################
++        """ Here we compute the gradients in TF"""
++        ##########################################
++
+         with tf.name_scope('stack_grad'):
+             with tf.device(var_device):
++
++                #####################################
++                """First, review sequence gradients"""
++                #####################################
++
+                 self.LL_grad_stacked = {x: tf.gradients(self.LL_stack, x)
+                                         for x in self.all_mini_vars}
+                 self.loss_grad_stacked = {x: tf.gradients(self.loss_stack, x)
+                                           for x in self.all_mini_vars}
+ 
++                ############################################
++                """Then, avg batch gradient initialization"""
++                ############################################
++
+                 self.avg_gradient_stack = []
+ 
+                 # TODO: Can we calculate natural gradients here easily?
+@@ -564,6 +802,10 @@
+                 # but still reduces variance significantly.
+                 coef = tf.squeeze(self.tf_batch_rewards, axis=-1) + self.loss_stack - avg_baseline
+ 
++                ############################################
++                """Finally, avg batch gradient calculation for SGD below"""
++                ############################################
++
+                 for x, y in zip(self.all_mini_vars, self.all_tf_vars):
+                     LL_grad = self.LL_grad_stacked[x][0]
+                     loss_grad = self.loss_grad_stacked[x][0]
+@@ -613,6 +855,11 @@
+                     [var for _, var in self.avg_gradient_stack]
+                 ))
+ 
++        ################################################
++        """This is the learning rate + bump for the AdamOptimizer, 
++        based on the learning rate + bump hyperparameters"""
++        ################################################
++
+         self.tf_learning_rate = tf.train.inverse_time_decay(
+             self.learning_rate,
+             global_step=self.global_step,
+@@ -621,10 +868,24 @@
+         )
+ 
+         self.learning_bump = learning_bump
++
++        ################################################
++        """Here is the AdamOptimizer to implement SGD"""
++        ################################################
++
++        #########################################
++        """First, construct new AdamOptimizer"""
++        #########################################
++
+         self.opt = tf.train.AdamOptimizer(
+             learning_rate=learning_bump * self.tf_learning_rate,
+             beta1=momentum
+         )
++
++        ################################################
++        """Then, apply the gradients to the variables for the next batch (...) ???"""
++        ################################################
++
+         self.sgd_stacked_op = self.opt.apply_gradients(
+             self.clipped_avg_gradient_stack,
+             global_step=self.global_step
+@@ -639,9 +900,11 @@
+             keep_checkpoint_every_n_hours=0.25,
+             max_to_keep=1000
+         )
++        """saves and restores variables"""
+ 
+         with tf.device(device_cpu):
+             tf.contrib.training.add_gradients_summaries(self.avg_gradient_stack)
++            """adds summaries to gradients"""
+ 
+             for v in self.all_tf_vars:
+                 variable_summaries(v)
+@@ -657,9 +920,15 @@
+             variable_summaries(self.loss_terms_stack, name='loss_terms_stack')
+             variable_summaries(tf.cast(self.tf_batch_seq_len, self.tf_dtype),
+                                name='batch_seq_len')
++            """variable_summaries function from utils.py"""
+ 
+             self.tf_merged_summaries = tf.summary.merge_all()
++            """Merges all summaries collected in the default graph."""
+ 
++    ######################################################################################################
++    """Initialize the structure of the graph, including all defined parameters, variables and relations"""
++    ######################################################################################################
++   
+     def initialize(self, finalize=True):
+         """Initialize the graph."""
+         self.sess.run(tf.global_variables_initializer())
+@@ -670,18 +939,40 @@
+             # https://stackoverflow.com/questions/38694111/
+             self.sess.graph.finalize()
+ 
++    ####################################################
++    """Now, the actual training of the model starts """
++    ####################################################
++
+     def train_many(self, num_iters, init_seed=42, with_summaries=False,
+                    with_MP=False, save_every=25, with_recall_probs=False,
+                    with_memorize_loss=False):
+         """Run one SGD op given a batch of simulation."""
+ 
++        ##################################################################
++        """This term probably defines the starting seed for each batch ... ???"""
++        ##################################################################
++
+         seed_start = init_seed + self.sess.run(self.global_step) * self.batch_size
++        """init_seed = 42 (s.o.)"""
++        """sess.run(global_step) outputs the global step (…) ???, which indeces the number of batches already run"""
++        """batch_size is the number of reviewing episodes per batch, e.g. 16 or 32 (...) ???"""
++        """adding the second term to init_seed guarantees that the same seed never occurs twice""" 
++        """seed_start is the beginning seed for each new batch"""
+ 
+         if with_summaries:
+             assert self.summary_dir is not None
+             os.makedirs(self.summary_dir, exist_ok=True)
+             train_writer = tf.summary.FileWriter(self.summary_dir,
+                                                  self.sess.graph)
++            """Writes Summary protocol buffers to event files.
++            The FileWriter class provides a mechanism to create an event file in a given directory and add summaries and events to it. 
++            The class updates the file contents asynchronously. 
++            This allows a training program to call methods to add data to the file directly from the training loop, without slowing down training."""
++        
++        ##########################################################
++        """Here, the SGD batch gradient applied to the variables from above are referenced"""
++        ##########################################################
++
+         train_op = self.sgd_stacked_op
+         grad_norm_op = self.grad_norm_stack
+         LL_op = self.LL_stack
+@@ -690,32 +981,95 @@
+ 
+         chkpt_file = os.path.join(self.save_dir, 'tpprl.ckpt')
+ 
++        ####################################################################################################################
++        """Multiprocessing in Python - Pool: distribute tasks to the available processors using FIFO scheduling"""
++        ####################################################################################################################
++        """Multiprocessing is a great way to improve the performance. 
++        We came across Python Multiprocessing when we had the task of evaluating the millions of excel expressions using python code. 
++        In such scenario, evaluating the expressions serially becomes imprudent and time-consuming."""
++
+         pool = None
+         try:
+             if with_MP:
+                 pool = MP.Pool()
+ 
++            ################################################
++            """We run trough each batch here (...)"""
++            ################################################
++
+             for iter_idx in range(num_iters):
++                """num_iters is the number of iterations in each epoch"""
++                """thus, iter_idx is the id of the current batch"""
++
+                 seed_end = seed_start + self.batch_size
++                """accordingly, batch_size must be the number of reviewing sequences per batch, which is in accordance to above"""
++                """seed_end is the last seed for each batch""" 
+ 
+                 seeds = range(seed_start, seed_end)
++                """seeds is the range of reviewing sequence seeds for each batch"""
++
++                ################################################################################################
++                """Here, we define the running of different reviewing sequences based on different seed"""
++                ################################################################################################
++                """IMPORTANT:  This is the connection from training to the class Scenario of each reviewing sequence"""
++                #############
+ 
+                 if with_MP:
+                     raw_scenarios = [mk_scenario_from_teacher(self, seed)
+                                      for seed in seeds]
++                    """raw_scenarios is the array of different mk_scenario_from_teacher(seed)-scenarios per batch, in which seed from seeds"""
+                     scenarios = pool.map(_scenario_worker, raw_scenarios)
+                 else:
+                     scenarios = [run_scenario(self, seed) for seed in seeds]
+ 
++                ################################################
++                """Some summary statistics per reviewing sequence are defined"""
++                ################################################
++
+                 num_events = [s.get_num_events() for s in scenarios]
+                 num_items_practised = [len(set(s.items)) for s in scenarios]
+ 
+                 num_correct = [np.sum(s.get_recalls()) for s in scenarios]
+ 
++                ################################################
++                """Here, get_feed_dict() is embedded in the training by inputting the scenarios per batch""" 
++                ################################################
++
+                 f_d = get_feed_dict(self, scenarios,
+                                     with_recall_probs=with_recall_probs,
+                                     with_memorize_loss=with_memorize_loss)
+ 
++                """from f_d the batch variables (created over scenarios per batch) such as tf_batch_rewards etc. are taken 
++                and then put into sess.run() of tensor flow"""
++
++                """  return {
++                        teacher.tf_batch_b_idxes: batch_b_idxes,
++                        teacher.tf_batch_rewards: batch_rewards,
++                        teacher.tf_batch_seq_len: batch_seq_len,
++                        teacher.tf_batch_t_deltas: batch_t_deltas,
++                        teacher.tf_batch_recalls: batch_recalls,
++                        teacher.tf_batch_init_h: batch_init_h,
++                        teacher.tf_batch_last_interval: batch_last_interval,
++                        }"""
++
++                ################################################
++                ################################################
++                """Here, finally, SGD parameters for each batch"""
++                ################################################
++                ################################################
++                
++                """sess.run(fetches, feed_dict):
++                Runs operations and evaluates tensors in fetches.
++
++                This method runs one "step" of TensorFlow computation, by running the necessary graph fragment to execute every Operation and evaluate every Tensor in fetches, 
++                substituting the values in feed_dict for the corresponding input values.
++                The fetches argument may be a single graph element, or an arbitrarily nested list, tuple, namedtuple, dict, or OrderedDict containing graph elements at its leaves."""
++
++                """The optional feed_dict argument allows the caller to override the value of tensors in the graph. 
++                Each value in feed_dict must be convertible to a numpy array of the dtype of the corresponding key."""
++
++                """The value returned by run() has the same shape as the fetches argument, where the leaves are replaced by the corresponding values returned by TensorFlow."""
++
+                 if with_summaries:
+                     reward, LL, loss, entropy, grad_norm, summaries, step, lr, _ = \
+                         self.sess.run([self.tf_batch_rewards, LL_op, loss_op,
+@@ -733,6 +1087,10 @@
+                                        train_op],
+                                       feed_dict=f_d)
+ 
++                ################################################################################################
++                """The above obtained variables are then summarized, in means and variances, and printed to the console"""
++                ################################################################################################
++
+                 mean_LL = np.mean(LL)
+                 std_LL = np.std(LL)
+ 
+@@ -779,6 +1137,10 @@
+                                     chkpt_file,
+                                     global_step=self.global_step,)
+ 
++        ################################################
++        """Finish the multi-processing pooling"""
++        ################################################
++
+         finally:
+             if pool is not None:
+                 pool.close()
+@@ -789,6 +1151,10 @@
+             print('Saving model!')
+             self.saver.save(self.sess, chkpt_file, global_step=self.global_step,)
+ 
++    #########################################################################
++    """TECHNICAL: Allows to restore a training and is called in the train-teaching.py"""
++    #########################################################################
++    
+     def restore(self, restore_dir=None, epoch_to_recover=None):
+         """Restores the model from a saved checkpoint."""
+ 
+@@ -808,6 +1174,12 @@
+         else:
+             self.saver.restore(self.sess, chkpt.model_checkpoint_path)
+ 
++    ###############################################################################
++    """ These calculations below have been moved now to the teacher class
++    under "... with tf.name_scope('calc_u'): ... " but are never called there either (...)???"""
++    ###############################################################################
++    """redundant ???"""
++   
+     def calc_u(self, h_states, feed_dict, batch_size, times, batch_time_start=None):
+         """Calculate u(t) at the times provided."""
+         # TODO: May not work if abs_max_events is hit.
+@@ -960,6 +1332,10 @@
+             'u': u,
+         }
+ 
++##################################################################
++"""feed_dict is used to feed values to TensorFlow Placeholders"""
++##################################################################
++# fills up all the tf_batch_X variables defined in the teacher
+ 
+ def get_feed_dict(teacher, scenarios, with_recall_probs=False, with_memorize_loss=False):
+     """Produce a feed_dict for the given list of scenarios."""
+@@ -967,31 +1343,45 @@
+     # assert all(df.sink_id.nunique() == 1 for df in batch_df), "Can only handle one sink at the moment."
+ 
+     batch_size = len(scenarios)
++    """number of reviewing sequences per batch"""
+     max_events = max(s.get_num_events() for s in scenarios)
+-    num_items = scenarios[0].num_items
++    """the reviewing sequence with max number of events per batch"""
++    num_items = scenarios[0].num_items 
+ 
+     full_shape = (batch_size, max_events)
+ 
+-    if with_memorize_loss:
+-        batch_rewards = np.asarray([
+-            s.get_m1_sq() for s in scenarios
+-        ])[:, np.newaxis]
+-    else:
+-        if not with_recall_probs:
+-            batch_rewards = np.asarray([
+-                -REWARD_SCALING * s.reward() for s in scenarios
+-            ])[:, np.newaxis]
+-        else:
+-            # We are exploiting the fact that we are training against a simulator.
+-            #
+-            # Will use this to investigate appropriate parameter space before
+-            # switching to stochastic rewards.
+-            batch_rewards = np.asarray([
+-                -REWARD_SCALING * np.mean([s.student.prob_recall(item, s.T + s.default_tau)
+-                                           for item in range(num_items)])
+-                for s in scenarios
++    batch_rewards = np.asarray([
++                -REWARD_SCALING * s.work_recalls() for s in scenarios
+             ])[:, np.newaxis]
+ 
++    ########################
++    """Reward Calculation of the original application (...)"""    
++    ########################
++    """with memory loss:       lets the reward depend on the accumulated recall loss per reviewing sequence
++    else:   
++        with_recall_probs:  average racall probability at T+tau over all items per reviewing sequence
++        else:               average racall at T+tau over all items per reviewing sequence"""
++
++    # if with_memorize_loss:
++    #     batch_rewards = np.asarray([
++    #         s.get_m1_sq() for s in scenarios
++    #     ])[:, np.newaxis]
++    # else:
++    #     if not with_recall_probs:
++    #         batch_rewards = np.asarray([
++    #             -REWARD_SCALING * s.work_recalls() for s in scenarios
++    #         ])[:, np.newaxis]
++    #     else:
++    #         # We are exploiting the fact that we are training against a simulator.
++    #         #
++    #         # Will use this to investigate appropriate parameter space before
++    #         # switching to stochastic rewards.
++    #         batch_rewards = np.asarray([
++    #             -REWARD_SCALING * np.mean([s.student.recall(item, s.T + s.default_tau)
++    #                                        for item in range(num_items)])
++    #             for s in scenarios
++    #         ])[:, np.newaxis]
++
+     batch_last_interval = np.asarray([
+         s.get_last_interval() for s in scenarios
+     ], dtype=float)
+@@ -1005,6 +1395,10 @@
+     batch_recalls = np.zeros(shape=full_shape, dtype=float)
+     batch_init_h = np.zeros(shape=(batch_size, teacher.num_hidden_states), dtype=float)
+ 
++    ##################################################################
++    """The batch_X variables are defined for batch dimension, but still ordered in reviewing sequence order (...) ???"""
++    ##################################################################
++
+     for idx, scen in enumerate(scenarios):
+         # They are sorted by time already.
+         batch_len = int(batch_seq_len[idx])
+@@ -1058,6 +1452,9 @@
+ 
+                     init_h=np.zeros((teacher.num_hidden_states, 1)))
+ 
++###############################################
++"""This function is never called/reffered to"""
++###############################################
+ 
+ def get_test_feed_dicts(teacher, seeds, **kwargs):
+     seeds = list(seeds)
+@@ -1065,6 +1462,9 @@
+                  for seed in seeds]
+     return (get_feed_dict(teacher, scenarios, **kwargs), scenarios)
+ 
++######################
++"""Very Important"""
++######################
+ 
+ def run_scenario(teacher, seed):
+     return mk_scenario_from_teacher(teacher, seed).run(max_events=MAX_EVENTS)
+@@ -1074,6 +1474,12 @@
+     scenario.run()
+     return scenario
+ 
++############################################
++############################################
++"""HERE, our APPLICATION STOPS"""
++############################################ 
++############################################
++# the algorithms below are for performance comparisons 
+ 
+ # Baselines
+ 
+diff -urN a/tpprl/exp_teacher_save.py b/tpprl/exp_teacher_save.py
+--- a/tpprl/exp_teacher_save.py
++++ b/tpprl/exp_teacher_save.py
+@@ -0,0 +1,1453 @@
++import numpy as np
++import os
++import tensorflow as tf
++import decorated_options as Deco
++import warnings
++import multiprocessing as MP
++import redqueen.utils as RU
++import heapq
++import math
++
++SAVE_DIR = 'teacher-log'
++MAX_EVENTS = 200
++REWARD_SCALING = 100
++
++# DEBUG ONLY
++try:
++    from .utils import variable_summaries, _now
++    from .cells import TPPRExpMarkedCellStacked
++    from .exp_sampler import ExpCDFSampler
++    
++except ModuleNotFoundError:
++    warnings.warn('Could not import local modules. Assuming they have been loaded using %run -i')
++
++def softmax(x):
++    e_x = np.exp(x - x.max())
++    return e_x / e_x.sum()
++
++class Student:
++    def __init__(self, n_0s, alphas, betas, seed):
++        """n_0 is the initial expertise in all items."""
++        self.ns = np.asarray([x for x in n_0s])
++        self.alphas = alphas
++        self.betas = betas
++        self.seed = seed
++        self.last_review_times = np.zeros_like(n_0s)
++        self.RS = np.random.RandomState(seed)
++        self.int_m1_sq = 0
++
++    def review(self, item, cur_time):
++        recall = self.recall(item, cur_time)
++        n_i = self.ns[item]
++
++        # Calculate the (1 - m(t))^2 loss of the past interval.
++        t_delta = cur_time - self.last_review_times[item]
++        x = t_delta + (1. / n_i) * (
++            2.0 * np.exp(-n_i * t_delta) -
++            0.5 * np.exp(-2.0 * n_i * t_delta) -
++            1.5
++        )
++        # print('x = ', x, 'n_i =', n_i, 't_delta = ', t_delta, '2.0 * np.exp(-n_i * t_delta) = ', 2.0 * np.exp(-n_i * t_delta), '0.5 * np.exp(-2.0 * n_i * t_delta) = ', 0.5 * np.exp(-2.0 * n_i * t_delta), ' total =', (
++        #     2.0 * np.exp(-n_i * t_delta) -
++        #     0.5 * np.exp(-2.0 * n_i * t_delta) -
++        #     1.5
++        # ))
++        self.int_m1_sq  += x
++       
++        if recall:
++            n_new = n_i * (1 - self.alphas[item])
++        else:
++            n_new = n_i * (1 + self.betas[item])
++
++        # The numbers need to be more carefully tuned?
++        self.ns[item] = min(max(1e-6, n_new), 1e2)
++        self.last_review_times[item] = cur_time
++
++        return recall
++
++    def get_m1_sq(self, episode_end_time):
++        m1 = self.int_m1_sq
++        for item in range(len(self.ns)):
++            t_delta = episode_end_time - self.last_review_times[item]
++            n_i = self.ns[item]
++            m1 += t_delta + (1. / n_i) * (
++                2.0 * np.exp(-n_i * t_delta) -
++                0.5 * np.exp(-2.0 * n_i * t_delta) -
++                1.5
++            )
++        return m1
++
++    def recall(self, item, t):
++        #m_t = np.heaviside(t,1) + np.heaviside(t-3,1) + np.heaviside(t-6,1) + np.heaviside(t-9,1) + np.heaviside(t-12,1)
++        #m_t = math.sqrt(t)
++        #m_t = np.random.normal(3, 1)
++        m_t = 3*np.heaviside(t,1) - 2*np.heaviside(t-3,1) + np.heaviside(t-4,1) + 3*np.heaviside(t-6,1) - np.heaviside(t-7,1) - 2*np.heaviside(t-9,1) - 2*np.heaviside(t-10,1) + 3*np.heaviside(t-11,1) + np.heaviside(t-12,1)
++        """für diese Funktion musst du die max und min Werte anders definieren"""
++        return m_t
++
++def mk_standard_student(scenario_opts, seed):
++    alphas = scenario_opts['alphas']
++    betas = scenario_opts['betas']
++    n_0s = scenario_opts['n_0s']
++    return Student(n_0s, alphas, betas, seed)
++
++class Scenario:
++    def __init__(self, scenario_opts, seed,
++                 Wm, Wh, Wr, Wt, Bh, Vy,
++                 wt, vt, bt, init_h):
++
++        self.num_items = Vy.shape[1]
++        self.student = mk_standard_student(scenario_opts, seed=seed * 2)
++
++        self.Wm = Wm
++        self.Wh = Wh
++        self.Wr = Wr
++        self.Wt = Wt
++        self.Bh = Bh
++        self.Vy = Vy
++
++        self._init = False
++        self.cur_h = init_h
++        self.T = scenario_opts['T']
++        self.default_tau = scenario_opts['tau']
++        self.RS = np.random.RandomState(seed)
++        self.last_time = -1
++        
++        self.recall = -1
++                
++        self.c_is = []
++        self.hidden_states = []
++        self.time_deltas = []
++        self.ts = []
++        self.recalls = []
++        self.recall_deltas = []
++        self.recall_changes = []
++        self._recall_probs = []
++        self.items = []
++        self.item_probs = []
++
++        self.exp_sampler = ExpCDFSampler(wt=wt, vt=vt, bt=bt, init_h=init_h,
++                                         t_min=0,
++                                         seed=seed + 1)
++
++    def get_m1_sq(self):
++        """Calculates the (1 - m)^2 reward for this scenario."""
++        assert self._init
++        return self.student.get_m1_sq(self.T)
++
++    def get_all_c_is(self):
++        assert self._init
++        return np.asarray(self.c_is + [self.exp_sampler.c])
++
++    def get_last_interval(self):
++        assert self._init
++        return self.T - self.last_time
++
++    def get_ts(self):
++        assert self._init
++        return np.asarray(self.ts)
++
++    def get_time_deltas(self):
++        assert self._init
++        return np.asarray(self.time_deltas)
++
++    def get_all_time_deltas(self):
++        assert self._init
++        return np.asarray(self.time_deltas +
++                          [self.T - self.last_time])
++
++    def get_all_hidden_states(self):
++        assert self._init
++        return np.asarray(self.hidden_states + [self.cur_h])
++
++    def get_num_events(self):
++        assert self._init
++        return len(self.c_is)
++
++    def get_item_probs(self):
++        assert self._init
++        return self.item_probs
++
++    def get_recalls(self):
++        assert self._init
++        return self.recalls
++
++    def get_recall_deltas(self):
++        assert self._init
++        return self.recall_deltas
++
++    def get_recall_changes(self):
++        assert self._init
++        return self.recall_changes
++    
++    def work_recalls(self):
++  
++        #of_recalls = np.sum(np.sqrt(np.absolute(np.divide(self.recall_deltas, 4))))/math.sqrt(len(self.recall_deltas)+1)
++        #math.sqrt(len(self.recall_deltas)+1)
++        # very good, but sometimes not all numbers caught - try again learning with 8 epochs, maybe not enough calls, dividing by log instead of sqrt was also good
++        # with much training and hidden_dims = 16, 6 (to 7) calls, but always 1, 2, 3, 4, 5, 5  !!! WTF !!! because /sqrt()?
++                
++        of_recalls = np.sum(self.recall_changes) + 1/(len(self.recall_changes)+1)
++        # - 1/len() appears to punish too much, although the difference appears not too great
++        # the more positive recall_changes the faster the learner 
++
++        #-> try without artificial regularizer, but only with inherent
++
++        ##################################################
++        ##################################################
++        # EXPLODING GRADIENTS !!!, but the programm clipps 
++        # especially problem in RNN with many input time steps
++        # HERE, this appears to happen after a lot of training. ... 4, 567891011, 1213, 1415, 1617,  1819202122   2324 ...
++        # Potential Solutions:  - fewer hidden layers, - smaller batch sizes(!), updating across fewer prior time steps and LSTM, gradient clipping and weight regularization (already done!?)
++        ### reducing batch size appears to work rather well ###
++        #######################################################
++        #######################################################
++
++        # with a lot of training we end up with twice the optimal calls of 5, as this is the most obvious training optimum
++        # basically, the learner cannot avoid calling immediately before and after a change, as these are the relevant recall changes !!!
++        # from there on a bit of improvement 10 -> 8 calls can happen (for 8 hidden dims)
++        # Potential further improvement:    reduce batch size further, devide by len()
++        ##########
++        # divide by /len() is not so mmuch different for much training ~ 8 (-9) calls, but with low training we get 5 calls
++        ########## dramatically reducing the batch size to e.g. 4 actually helps to get to 8 calls !!! ##########
++
++        ### do not include time deltas as this only irritates the RNN
++
++        ### do not use log() as this is dominated by sqrt()
++
++        ### do not simply add number of calls regularizer as this is not strong enough ???
++
++        ### non-sqrt number of calls regularizer is too strong ???
++
++        ### the less training, the less hidden_dims, simply the more calls and also hits ???
++
++        return of_recalls
++
++    def update_hidden_state(self, item, t, time_delta):
++        """Returns the hidden state after a post by src_id and time delta."""
++        #self._recall_probs.append(self.student.prob_recall(item, t))
++        recall = float(self.student.review(item, t))
++        self.recalls.append(recall)
++
++        # recall_delta = recall - self.last_recall
++        # self.recall_deltas.append(recall_delta)
++
++        # self.last_recall = recall
++
++        return np.tanh(
++            self.Wm[item, :][:, np.newaxis] +
++            self.Wh.dot(self.cur_h) +
++            self.Wr.dot(recall) +
++            self.Wt * time_delta +
++            self.Bh
++        )
++
++    def generate_sample(self, p):
++        t_next = self.exp_sampler.generate_sample()
++        item_next = self.RS.choice(np.arange(self.num_items), p=p)
++        return (t_next, item_next)
++
++    def run(self, max_events=None):
++        """Execute a study episode."""
++        assert not self._init
++        self._init = True
++
++        if max_events is None:
++            max_events = float('inf')
++
++        idx = 0
++        t = 0
++        last_recall = float(self.student.review(0, 0))
++
++        max_recall = float(self.student.review(0, 14))
++        min_recall = float(self.student.review(0, 0))
++        range_recall = max_recall - min_recall
++
++        p = softmax(self.Vy.T.dot(self.cur_h)).squeeze(axis=-1)
++        self.item_probs.append(p)
++        (t_next, item_next) = self.generate_sample(p)
++
++        while idx < max_events and t_next < self.T:
++            idx += 1
++            time_delta = t_next - t
++
++            recall = float(self.student.review(item_next, t_next))
++            recall_delta = recall - last_recall
++
++            if np.divide(np.absolute(recall_delta), range_recall) >= 0.1:
++                recall_change = 1
++            else:
++                recall_change = 0
++            
++            self.recall_deltas.append(recall_delta)
++            self.recall_changes.append(recall_change)
++
++            last_recall = recall
++
++            self.items.append(item_next)
++            self.c_is.append(self.exp_sampler.c)
++            self.hidden_states.append(self.cur_h)
++            self.time_deltas.append(time_delta)
++            self.ts.append(t_next)
++            self.last_time = t
++
++            t = t_next
++
++            self.cur_h = self.update_hidden_state(item_next, t, time_delta)
++            self.exp_sampler.register_event(t, self.cur_h, own_event=True)
++
++            p = softmax(self.Vy.T.dot(self.cur_h)).squeeze(axis=-1)
++            self.item_probs.append(p)
++            (t_next, item_next) = self.generate_sample(p)
++
++        return self
++
++    # def reward(self, tau=None):
++    #     """Returns the result of a test conducted at T + tau."""
++    #     if tau is None:
++    #         tau = self.default_tau
++
++    #     return np.mean([self.student.recall(item, self.T + tau)
++    #                    for item in range(self.num_items)])
++
++
++def mk_def_teacher_opts(hidden_dims, num_items,
++                        scenario_opts, seed=42, **kwargs):
++    """Make default option set."""
++    RS  = np.random.RandomState(seed=seed)
++
++    def_exp_recurrent_teacher_opts = Deco.Options(
++        t_min=0,
++        scope=None,
++        decay_steps=100,
++        decay_rate=0.01,
++        num_hidden_states=hidden_dims,
++        learning_rate=0.02,
++        learning_bump=1,
++        clip_norm=1.0,
++        tau=15.0,
++
++        Wh=RS.randn(hidden_dims, hidden_dims) * 0.1 + np.diag(np.ones(hidden_dims)),  # Careful initialization
++        Wm=RS.randn(num_items, hidden_dims),
++        Wr=RS.randn(hidden_dims, 1),
++        Wt=RS.randn(hidden_dims, 1),
++        # Vy=RS.randn(hidden_dims, num_items),
++        Vy=np.ones((hidden_dims, num_items)),  # Careful initialization
++        Bh=RS.randn(hidden_dims, 1),
++
++        vt=RS.randn(hidden_dims, 1),
++        wt=np.abs(RS.rand(1)) * -1,
++        bt=np.abs(RS.randn(1)),
++
++        # The graph execution time depends on this parameter even though each
++        # trajectory may contain much fewer events. So it is wise to set
++        # it such that it is just above the total number of events likely
++        # to be seen.
++        momentum=0.9,
++        max_events=5000,
++        batch_size=12,
++        T=100.0,
++
++        device_cpu='/cpu:0',
++        device_gpu='/gpu:0',
++        only_cpu=False,
++
++        save_dir=SAVE_DIR,
++
++        # Expected: './tpprl.summary/train-{}/'.format(run)
++        summary_dir=None,
++
++        decay_q_rate=0.0,
++
++        # Whether or not to deduct the baseline.
++        with_baseline=True,
++
++        q=0.005,
++        q_entropy=0.01,
++
++        scenario_opts=scenario_opts,
++
++        set_wt_zero=False,
++    )
++
++    return def_exp_recurrent_teacher_opts.set(**kwargs)
++
++
++class ExpRecurrentTeacher:
++    @Deco.optioned()
++    def __init__(self, Vy, Wm, Wh, Wt, Wr, Bh, vt, wt, bt, num_hidden_states,
++                 sess, scope, batch_size, max_events, q, q_entropy,
++                 learning_bump, learning_rate, clip_norm, t_min, T,
++                 summary_dir, save_dir, decay_steps, decay_rate, momentum,
++                 device_cpu, device_gpu, only_cpu, with_baseline,
++                 num_items, decay_q_rate, scenario_opts, tau, set_wt_zero):
++        """Initialize the trainer with the policy parameters."""
++
++        self.decay_q_rate = decay_q_rate
++        self.scenario_opts = scenario_opts
++
++        self.t_min = 0
++        self.t_max = T
++        # self.T = T
++        # self.tau = tau
++
++        self.set_wt_zero = set_wt_zero
++
++        self.summary_dir = summary_dir
++        self.save_dir = save_dir
++
++        # self.src_embed_map = {x.src_id: idx + 1
++        #                       for idx, x in enumerate(sim_opts.create_other_sources())}
++
++        # To handle multiple reloads of redqueen related modules.
++        self.src_embed_map = np.arange(num_items)
++
++        self.tf_dtype = tf.float32
++        self.np_dtype = np.float32
++
++        self.learning_rate = learning_rate
++        self.decay_rate = decay_rate
++        self.decay_steps = decay_steps
++        self.clip_norm = clip_norm
++
++        self.q = q
++        self.q_entropy = q_entropy
++        self.batch_size = batch_size
++
++        self.tf_batch_size = None
++        self.tf_max_events = None
++        self.num_items = num_items
++
++        self.abs_max_events = max_events
++        self.num_hidden_states = num_hidden_states
++
++        # init_h = np.reshape(init_h, (-1, 1))
++        Bh = np.reshape(Bh, (-1, 1))
++
++        self.scope = scope or type(self).__name__
++
++        var_device = device_cpu if only_cpu else device_gpu
++
++        # self.opt = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
++        with tf.device(device_cpu):
++            # Global step needs to be on the CPU (Why?)
++            self.global_step = tf.Variable(0, name='global_step', trainable=False)
++
++        with tf.variable_scope(self.scope):
++            with tf.variable_scope('hidden_state'):
++                with tf.device(var_device):
++                    self.tf_Wm = tf.get_variable(name='Wm', shape=Wm.shape,
++                                                 initializer=tf.constant_initializer(Wm))
++                    self.tf_Wh = tf.get_variable(name='Wh', shape=Wh.shape,
++                                                 initializer=tf.constant_initializer(Wh))
++                    self.tf_Wt = tf.get_variable(name='Wt', shape=Wt.shape,
++                                                 initializer=tf.constant_initializer(Wt))
++                    self.tf_Wr = tf.get_variable(name='Wr', shape=Wr.shape,
++                                                 initializer=tf.constant_initializer(Wr))
++                    self.tf_Bh = tf.get_variable(name='Bh', shape=Bh.shape,
++                                                 initializer=tf.constant_initializer(Bh))
++
++                    # Needed to calculate the hidden state for one step.
++                    self.tf_h = tf.get_variable(name='h', initializer=tf.zeros((self.num_hidden_states, 1), dtype=self.tf_dtype))
++
++                self.tf_b_idx = tf.placeholder(name='b_idx', shape=1, dtype=tf.int32)
++                self.tf_t_delta = tf.placeholder(name='t_delta', shape=1, dtype=self.tf_dtype)
++                self.tf_recall = tf.placeholder(name='recall', shape=(1, 1), dtype=self.tf_dtype)
++
++                self.tf_h_next = tf.nn.tanh(
++                    tf.transpose(
++                        tf.nn.embedding_lookup(self.tf_Wm, self.tf_b_idx, name='b_embed')
++                    ) +
++                    tf.matmul(self.tf_Wh, self.tf_h) +
++                    tf.matmul(self.tf_Wr, self.tf_recall) +
++                    self.tf_Wt * self.tf_t_delta +
++                    self.tf_Bh,
++                    name='h_next'
++                )
++
++            with tf.variable_scope('output'):
++                with tf.device(var_device):
++                    self.tf_Vy = tf.get_variable(name='Vy', shape=Vy.shape,
++                                                 initializer=tf.constant_initializer(Vy))
++                    self.tf_bt = tf.get_variable(name='bt', shape=bt.shape,
++                                                 initializer=tf.constant_initializer(bt))
++                    self.tf_vt = tf.get_variable(name='vt', shape=vt.shape,
++                                                 initializer=tf.constant_initializer(vt))
++
++                    wt_init = 0.0 if set_wt_zero else wt
++                    self.tf_wt = tf.get_variable(name='wt', shape=wt.shape,
++                                                 initializer=tf.constant_initializer(wt_init))
++                # self.tf_t_delta = tf.placeholder(name='t_delta', shape=1, dtype=self.tf_dtype)
++                # self.tf_u_t = tf.exp(
++                #     tf.tensordot(self.tf_vt, self.tf_h, axes=1) +
++                #     self.tf_t_delta * self.tf_wt +
++                #     self.tf_bt,
++                #     name='u_t'
++                # )
++
++            # Create a large dynamic_rnn kind of network which can calculate
++            # the gradients for a given given batch of simulations.
++            with tf.variable_scope('training'):
++                self.tf_batch_rewards = tf.placeholder(name='rewards',
++                                                       shape=(self.tf_batch_size, 1),
++                                                       dtype=self.tf_dtype)
++                self.tf_batch_t_deltas = tf.placeholder(name='t_deltas',
++                                                        shape=(self.tf_batch_size, self.tf_max_events),
++                                                        dtype=self.tf_dtype)
++                self.tf_batch_b_idxes = tf.placeholder(name='b_idxes',
++                                                       shape=(self.tf_batch_size, self.tf_max_events),
++                                                       dtype=tf.int32)
++                self.tf_batch_recalls = tf.placeholder(name='recalls',
++                                                       shape=(self.tf_batch_size, self.tf_max_events),
++                                                       dtype=self.tf_dtype)
++                self.tf_batch_seq_len = tf.placeholder(name='seq_len',
++                                                       shape=(self.tf_batch_size, 1),
++                                                       dtype=tf.int32)
++                self.tf_batch_last_interval = tf.placeholder(name='last_interval',
++                                                             shape=self.tf_batch_size,
++                                                             dtype=self.tf_dtype)
++
++                # Inferred batch size
++                inf_batch_size = tf.shape(self.tf_batch_b_idxes)[0]
++
++                self.tf_batch_init_h = tf.zeros(
++                    name='init_h',
++                    shape=(inf_batch_size, self.num_hidden_states),
++                    dtype=self.tf_dtype
++                )
++
++                # Stacked version (for performance)
++
++                with tf.name_scope('stacked'):
++                    with tf.device(var_device):
++                        (self.Wm_mini, self.Wr_mini, self.Wh_mini,
++                         self.Wt_mini, self.Bh_mini, self.wt_mini,
++                         self.vt_mini, self.bt_mini, self.Vy_mini) = [
++                             tf.stack(x, name=name)
++                             for x, name in zip(
++                                     zip(*[
++                                         (tf.identity(self.tf_Wm), tf.identity(self.tf_Wr),
++                                          tf.identity(self.tf_Wh), tf.identity(self.tf_Wt),
++                                          tf.identity(self.tf_Bh), tf.identity(self.tf_wt),
++                                          tf.identity(self.tf_vt), tf.identity(self.tf_bt),
++                                          tf.identity(self.tf_Vy))
++                                         for _ in range(self.batch_size)
++                                     ]),
++                                     ['Wm', 'Wr', 'Wh', 'Wt', 'Bh', 'wt', 'vt', 'bt', 'Vy']
++                             )
++                        ]
++
++                        self.rnn_cell_stack = TPPRExpMarkedCellStacked(
++                            hidden_state_size=(None, self.num_hidden_states),
++                            output_size=[self.num_hidden_states] + [1] * 4,
++                            tf_dtype=self.tf_dtype,
++                            Wm=self.Wm_mini, Wr=self.Wr_mini,
++                            Wh=self.Wh_mini, Wt=self.Wt_mini,
++                            Bh=self.Bh_mini, wt=self.wt_mini,
++                            vt=self.vt_mini, bt=self.bt_mini,
++                            Vy=self.Vy_mini,
++                            assume_wt_zero=self.set_wt_zero,
++                        )
++
++                        ((self.h_states_stack, LL_log_terms_stack,
++                          LL_int_terms_stack, loss_terms_stack,
++                          entropy_terms_stack),
++                         tf_batch_h_t_mini) = tf.nn.dynamic_rnn(
++                            self.rnn_cell_stack,
++                            inputs=(tf.expand_dims(self.tf_batch_b_idxes, axis=-1),
++                                    tf.expand_dims(self.tf_batch_recalls, axis=-1),
++                                    tf.expand_dims(self.tf_batch_t_deltas, axis=-1)),
++                            sequence_length=tf.squeeze(self.tf_batch_seq_len, axis=-1),
++                            dtype=self.tf_dtype,
++                            initial_state=self.tf_batch_init_h
++                        )
++
++                        self.LL_log_terms_stack = tf.squeeze(LL_log_terms_stack, axis=-1)
++                        self.LL_int_terms_stack = tf.squeeze(LL_int_terms_stack, axis=-1)
++                        self.loss_terms_stack = tf.squeeze(loss_terms_stack, axis=-1)
++                        self.entropy_terms_stack = tf.squeeze(entropy_terms_stack, axis=-1)
++
++                        # LL_last_term_stack = rnn_cell.last_LL(tf_batch_h_t_mini, self.tf_batch_last_interval)
++                        # loss_last_term_stack = rnn_cell.last_loss(tf_batch_h_t_mini, self.tf_batch_last_interval)
++
++                        self.LL_last_term_stack = self.rnn_cell_stack.last_LL(tf_batch_h_t_mini, self.tf_batch_last_interval)
++                        self.loss_last_term_stack = self.rnn_cell_stack.last_loss(tf_batch_h_t_mini, self.tf_batch_last_interval)
++
++                        self.LL_stack = (tf.reduce_sum(self.LL_log_terms_stack, axis=1) - tf.reduce_sum(self.LL_int_terms_stack, axis=1)) + self.LL_last_term_stack
++
++                        decay_term = tf.pow(tf.cast(self.global_step, self.tf_dtype), self.decay_q_rate)
++                        tf_seq_len = tf.squeeze(self.tf_batch_seq_len, axis=-1)
++                        self.entropy_stack = tf.where(
++                            tf.equal(tf_seq_len, 0),
++                            tf.zeros(shape=(inf_batch_size,), dtype=self.tf_dtype),
++                            tf.reduce_sum(self.entropy_terms_stack, axis=1) / tf.cast(tf_seq_len, self.tf_dtype),
++                            name='entropy_stack'
++                        )
++                        self.loss_stack = decay_term * (
++                            (self.q / 2) * (tf.reduce_sum(self.loss_terms_stack, axis=1) +
++                                            self.loss_last_term_stack) -
++                            self.q_entropy * self.entropy_stack
++                        )
++
++            with tf.name_scope('calc_u'):
++                with tf.device(var_device):
++                    # These are operations needed to calculate u(t) in post-processing.
++                    # These can be done entirely in numpy-space, but since we have a
++                    # version in tensorflow, they have been moved here to avoid
++                    # memory leaks.
++                    # Otherwise, new additions to the graph were made whenever the
++                    # function calc_u was called.
++
++                    self.calc_u_h_states = tf.placeholder(
++                        name='calc_u_h_states',
++                        shape=(self.tf_batch_size, self.tf_max_events, self.num_hidden_states),
++                        dtype=self.tf_dtype
++                    )
++                    self.calc_u_batch_size = tf.placeholder(
++                        name='calc_u_batch_size',
++                        shape=(None,),
++                        dtype=tf.int32
++                    )
++
++                    self.calc_u_c_is_init = tf.matmul(self.tf_batch_init_h, self.tf_vt) + self.tf_bt
++                    self.calc_u_c_is_rest = tf.squeeze(
++                        tf.matmul(
++                            self.calc_u_h_states,
++                            tf.tile(
++                                tf.expand_dims(self.tf_vt, 0),
++                                [self.calc_u_batch_size[0], 1, 1]
++                            )
++                        ) + self.tf_bt,
++                        axis=-1,
++                        name='calc_u_c_is_rest'
++                    )
++
++                    self.calc_u_is_own_event = tf.equal(self.tf_batch_b_idxes, 0)
++
++        # TODO: The all_tf_vars and all_mini_vars MUST be kept in sync.
++        self.all_tf_vars = [self.tf_Wh, self.tf_Wm, self.tf_Wt, self.tf_Bh,
++                            self.tf_Wr, self.tf_bt, self.tf_vt, self.tf_wt, self.tf_Vy]
++
++        self.all_mini_vars = [self.Wh_mini, self.Wm_mini, self.Wt_mini, self.Bh_mini,
++                              self.Wr_mini, self.bt_mini, self.vt_mini, self.wt_mini, self.Vy_mini]
++
++        with tf.name_scope('stack_grad'):
++            with tf.device(var_device):
++                self.LL_grad_stacked = {x: tf.gradients(self.LL_stack, x)
++                                        for x in self.all_mini_vars}
++                self.loss_grad_stacked = {x: tf.gradients(self.loss_stack, x)
++                                          for x in self.all_mini_vars}
++
++                self.avg_gradient_stack = []
++
++                # TODO: Can we calculate natural gradients here easily?
++                if with_baseline:
++                    avg_baseline = (tf.reduce_mean(self.tf_batch_rewards, axis=0) +
++                                    tf.reduce_mean(self.loss_stack, axis=0))
++                else:
++                    avg_baseline = 0.0
++
++                # Removing the average reward + loss is not optimal baseline,
++                # but still reduces variance significantly.
++                coef = tf.squeeze(self.tf_batch_rewards, axis=-1) + self.loss_stack - avg_baseline
++
++                for x, y in zip(self.all_mini_vars, self.all_tf_vars):
++                    LL_grad = self.LL_grad_stacked[x][0]
++                    loss_grad = self.loss_grad_stacked[x][0]
++
++                    if self.set_wt_zero and y == self.tf_wt:
++                        self.avg_gradient_stack.append(([0.0], y))
++                        continue
++
++                    dim = len(LL_grad.get_shape())
++                    if dim == 1:
++                        self.avg_gradient_stack.append(
++                            (tf.reduce_mean(LL_grad * coef + loss_grad, axis=0), y)
++                        )
++                    elif dim == 2:
++                        self.avg_gradient_stack.append(
++                            (
++                                tf.reduce_mean(
++                                    LL_grad * tf.tile(tf.reshape(coef, (-1, 1)),
++                                                      [1, tf.shape(LL_grad)[1]]) +
++                                    loss_grad,
++                                    axis=0
++                                ),
++                                y
++                            )
++                        )
++                    elif dim == 3:
++                        self.avg_gradient_stack.append(
++                            (
++                                tf.reduce_mean(
++                                    LL_grad * tf.tile(tf.reshape(coef, (-1, 1, 1)),
++                                                      [1, tf.shape(LL_grad)[1], tf.shape(LL_grad)[2]]) +
++                                    loss_grad,
++                                    axis=0
++                                ),
++                                y
++                            )
++                        )
++
++                self.clipped_avg_gradients_stack, self.grad_norm_stack = \
++                    tf.clip_by_global_norm(
++                        [grad for grad, _ in self.avg_gradient_stack],
++                        clip_norm=self.clip_norm
++                    )
++
++                self.clipped_avg_gradient_stack = list(zip(
++                    self.clipped_avg_gradients_stack,
++                    [var for _, var in self.avg_gradient_stack]
++                ))
++
++        self.tf_learning_rate = tf.train.inverse_time_decay(
++            self.learning_rate,
++            global_step=self.global_step,
++            decay_steps=self.decay_steps,
++            decay_rate=self.decay_rate
++        )
++
++        self.learning_bump = learning_bump
++        self.opt = tf.train.AdamOptimizer(
++            learning_rate=learning_bump * self.tf_learning_rate,
++            beta1=momentum
++        )
++        self.sgd_stacked_op = self.opt.apply_gradients(
++            self.clipped_avg_gradient_stack,
++            global_step=self.global_step
++        )
++
++        self.sess = sess
++
++        # There are other global variables as well, like the ones which the
++        # ADAM optimizer uses.
++        self.saver = tf.train.Saver(
++            tf.global_variables(),
++            keep_checkpoint_every_n_hours=0.25,
++            max_to_keep=1000
++        )
++
++        with tf.device(device_cpu):
++            tf.contrib.training.add_gradients_summaries(self.avg_gradient_stack)
++
++            for v in self.all_tf_vars:
++                variable_summaries(v)
++
++            variable_summaries(self.tf_learning_rate, name='learning_rate')
++            variable_summaries(self.loss_stack, name='loss_stack')
++            variable_summaries(self.LL_stack, name='LL_stack')
++            variable_summaries(self.loss_last_term_stack, name='loss_last_term_stack')
++            variable_summaries(self.LL_last_term_stack, name='LL_last_term_stack')
++            variable_summaries(self.h_states_stack, name='hidden_states_stack')
++            variable_summaries(self.LL_log_terms_stack, name='LL_log_terms_stack')
++            variable_summaries(self.LL_int_terms_stack, name='LL_int_terms_stack')
++            variable_summaries(self.loss_terms_stack, name='loss_terms_stack')
++            variable_summaries(tf.cast(self.tf_batch_seq_len, self.tf_dtype),
++                               name='batch_seq_len')
++
++            self.tf_merged_summaries = tf.summary.merge_all()
++
++    def initialize(self, finalize=True):
++        """Initialize the graph."""
++        self.sess.run(tf.global_variables_initializer())
++        if finalize:
++            # No more nodes will be added to the graph beyond this point.
++            # Recommended way to prevent memory leaks afterwards, esp. if the
++            # session will be used in a multi-threaded manner.
++            # https://stackoverflow.com/questions/38694111/
++            self.sess.graph.finalize()
++
++    def train_many(self, num_iters, init_seed=42, with_summaries=False,
++                   with_MP=False, save_every=25, with_recall_probs=False,
++                   with_memorize_loss=False):
++        """Run one SGD op given a batch of simulation."""
++
++        seed_start = init_seed + self.sess.run(self.global_step) * self.batch_size
++
++        if with_summaries:
++            assert self.summary_dir is not None
++            os.makedirs(self.summary_dir, exist_ok=True)
++            train_writer = tf.summary.FileWriter(self.summary_dir,
++                                                 self.sess.graph)
++        train_op = self.sgd_stacked_op
++        grad_norm_op = self.grad_norm_stack
++        LL_op = self.LL_stack
++        loss_op = self.loss_stack
++        entropy_op = self.entropy_stack
++
++        chkpt_file = os.path.join(self.save_dir, 'tpprl.ckpt')
++
++        pool = None
++        try:
++            if with_MP:
++                pool = MP.Pool()
++
++            for iter_idx in range(num_iters):
++                seed_end = seed_start + self.batch_size
++
++                seeds = range(seed_start, seed_end)
++
++                if with_MP:
++                    raw_scenarios = [mk_scenario_from_teacher(self, seed)
++                                     for seed in seeds]
++                    scenarios = pool.map(_scenario_worker, raw_scenarios)
++                else:
++                    scenarios = [run_scenario(self, seed) for seed in seeds]
++
++                num_events = [s.get_num_events() for s in scenarios]
++                num_items_practised = [len(set(s.items)) for s in scenarios]
++
++                num_correct = [np.sum(s.get_recalls()) for s in scenarios]
++
++                f_d = get_feed_dict(self, scenarios,
++                                    with_recall_probs=with_recall_probs,
++                                    with_memorize_loss=with_memorize_loss)
++
++                if with_summaries:
++                    reward, LL, loss, entropy, grad_norm, summaries, step, lr, _ = \
++                        self.sess.run([self.tf_batch_rewards, LL_op, loss_op,
++                                       entropy_op, grad_norm_op,
++                                       self.tf_merged_summaries,
++                                       self.global_step, self.tf_learning_rate,
++                                       train_op],
++                                      feed_dict=f_d)
++                    train_writer.add_summary(summaries, step)
++                else:
++                    reward, LL, loss, entropy, grad_norm, step, lr, _ = \
++                        self.sess.run([self.tf_batch_rewards, LL_op, loss_op,
++                                       entropy_op, grad_norm_op,
++                                       self.global_step, self.tf_learning_rate,
++                                       train_op],
++                                      feed_dict=f_d)
++
++                mean_LL = np.mean(LL)
++                std_LL = np.std(LL)
++
++                mean_loss = np.mean(loss)
++                std_loss = np.std(loss)
++
++                mean_reward = np.mean(reward)
++                std_reward = np.std(reward)
++
++                mean_CTG = np.mean(loss + reward)
++                std_CTG = np.std(loss + reward)
++
++                mean_entropy = np.mean(entropy)
++                std_entropy = np.std(entropy)
++
++                mean_events = np.mean(num_events)
++                std_events = np.std(num_events)
++
++                mean_correct = np.mean(num_correct)
++                std_correct = np.std(num_correct)
++
++                print('{} Run {}, LL {:.2f}±{:.2f}, entropy {:.2f}±{:.2f}, loss {:.2f}±{:.2f}, Rwd {:.3f}±{:.3f}'
++                      ', CTG {:.3f}±{:.3f}, seeds {}--{}, grad_norm {:.2f}, step = {}'
++                      ', lr = {:.5f}, events = {:.2f}±{:.2f}/{:.2f}±{:.2f}, items = {:.2f}/{}, wt={:.5f}, bt={:.5f}'
++                      .format(_now(), iter_idx,
++                              mean_LL, std_LL,
++                              mean_entropy, std_entropy,
++                              mean_loss, std_loss,
++                              mean_reward, std_reward,
++                              mean_CTG, std_CTG,
++                              seed_start, seed_end - 1,
++                              grad_norm, step, lr,
++                              mean_correct, std_correct,
++                              mean_events, std_events,
++                              np.mean(num_items_practised), self.num_items,
++                              self.sess.run(self.tf_wt)[0], self.sess.run(self.tf_bt)[0]))
++
++                #########################
++                ##### Test Printing #####
++                #########################
++
++                ### recalls and rewards
++                ######################
++
++                #geta_recalls = [s.get_recalls() for s in scenarios]
++
++                #geta_recalls_len = [len(s.get_recalls()) for s in scenarios]
++
++                #geta_recall_deltas = [s.get_recall_deltas() for s in scenarios]
++
++                #geta_recall_deltas_len = [len(s.get_recall_deltas()) for s in scenarios]
++
++                # geta_works = [s.work_recalls() for s in scenarios]
++
++                # print("geta_recalls:", geta_recalls)
++                # print("geta_recall_deltas:", geta_recall_deltas)
++                # print("geta_works:", geta_works)
++                # print("geta_recalls_len:", geta_recalls_len)
++                # print("geta_recall_deltas_len:", geta_recall_deltas_len)
++
++                ### events and rewards
++                ######################
++
++                # geta_num_events = [s.get_num_events() for s in scenarios]
++
++                # geta_recalls_sum = [np.sum(s.get_recalls()) for s in scenarios]
++
++                # geta_recalls = [s.get_recalls() for s in scenarios]
++
++                # geta_works = [s.work_recalls() for s in scenarios]
++
++                # print(geta_recalls_sum, geta_recalls, geta_num_events)
++
++                # print(geta_recalls, geta_works)
++
++                ### timings
++                ###########
++
++                #geta_ts = [s.get_ts() for s in scenarios]
++
++                #geta_deltas = [s.get_time_deltas() for s in scenarios]
++
++                #geta_all_deltas = [s.get_all_time_deltas() for s in scenarios]
++
++                # geta_all_deltas_sum = [np.sum(s.get_all_time_deltas()) for s in scenarios]
++
++                #geta_all_deltas_len = [len(s.get_all_time_deltas()) for s in scenarios]
++
++                # print("geta_ts:", geta_ts)
++                # print("geta_all_deltas", geta_all_deltas)
++                # print("geta_all_deltas_len", geta_all_deltas_len)
++
++                # Ready for the next iter_idx.
++                seed_start = seed_end
++
++                if iter_idx % save_every == 0:
++                    print('Saving model!')
++                    self.saver.save(self.sess,
++                                    chkpt_file,
++                                    global_step=self.global_step,)
++
++        finally:
++            if pool is not None:
++                pool.close()
++
++            if with_summaries:
++                train_writer.flush()
++
++            print('Saving model!')
++            self.saver.save(self.sess, chkpt_file, global_step=self.global_step,)
++
++    def restore(self, restore_dir=None, epoch_to_recover=None):
++        """Restores the model from a saved checkpoint."""
++
++        if restore_dir is None:
++            restore_dir = self.save_dir
++
++        chkpt = tf.train.get_checkpoint_state(restore_dir)
++
++        if epoch_to_recover is not None:
++            suffix = '-{}.meta'.format(epoch_to_recover)
++            file = [x for x in chkpt.all_model_checkpoint_paths
++                    if x.endswith(suffix)]
++            if len(file) < 1:
++                raise FileNotFoundError('Epoch {} not found.'
++                                        .format(epoch_to_recover))
++            self.saver.restore(self.sess, file[0])
++        else:
++            self.saver.restore(self.sess, chkpt.model_checkpoint_path)
++
++    def calc_u(self, h_states, feed_dict, batch_size, times, batch_time_start=None):
++        """Calculate u(t) at the times provided."""
++        # TODO: May not work if abs_max_events is hit.
++
++        if batch_time_start is None:
++            batch_time_start = np.zeros(batch_size)
++
++        feed_dict[self.calc_u_h_states] = h_states
++        feed_dict[self.calc_u_batch_size] = [batch_size]
++
++        tf_seq_len = np.squeeze(
++            self.sess.run(self.tf_batch_seq_len, feed_dict=feed_dict),
++            axis=-1
++        ) + 1  # +1 to include the survival term.
++
++        assert self.tf_max_events is None or np.all(tf_seq_len < self.abs_max_events), "Cannot handle events > max_events right now."
++        # This will involve changing how the survival term is added, is_own_event is added, etc.
++
++        tf_c_is_arr = self.sess.run(self.calc_u_c_is_rest, feed_dict=feed_dict)
++        tf_c_is = (
++            [
++                self.sess.run(
++                    self.calc_u_c_is_init,
++                    feed_dict=feed_dict
++                )
++            ] +
++            np.split(tf_c_is_arr, tf_c_is_arr.shape[1], axis=1)
++        )
++        tf_c_is = list(zip(*tf_c_is))
++
++        tf_t_deltas_arr = self.sess.run(self.tf_batch_t_deltas, feed_dict=feed_dict)
++        tf_t_deltas = (
++            np.split(tf_t_deltas_arr, tf_t_deltas_arr.shape[1], axis=1) +
++            # Cannot add last_interval at the end of the array because
++            # the sequence may have ended before that.
++            # Instead, we add tf_t_deltas of 0 to make the length of this
++            # array the same as of tf_c_is
++            [np.asarray([0.0] * batch_size)]
++        )
++        tf_t_deltas = list(zip(*tf_t_deltas))
++
++        tf_is_own_event_arr = self.sess.run(self.calc_u_is_own_event, feed_dict=feed_dict)
++        tf_is_own_event = (
++            np.split(tf_is_own_event_arr, tf_is_own_event_arr.shape[1], axis=1) +
++            [np.asarray([False] * batch_size)]
++        )
++
++        tf_is_own_event = [
++            [bool(x) for x in y]
++            for y in list(zip(*tf_is_own_event))
++        ]
++
++        last_intervals = self.sess.run(
++            self.tf_batch_last_interval,
++            feed_dict=feed_dict
++        )
++
++        for idx in range(batch_size):
++            # assert tf_is_own_event[idx][tf_seq_len[idx] - 1]
++            tf_is_own_event[idx][tf_seq_len[idx] - 1] = False
++
++            assert tf_t_deltas[idx][tf_seq_len[idx] - 1] == 0
++
++            # This quantity may be zero for real-data.
++            # assert tf_t_deltas[idx][tf_seq_len[idx] - 2] > 0
++
++            # tf_t_deltas[idx] is a tuple,
++            # we to change it to a list to update a value and then convert
++            # back to a tuple.
++            old_t_deltas = list(tf_t_deltas[idx])
++            old_t_deltas[tf_seq_len[idx] - 1] = last_intervals[idx]
++            tf_t_deltas[idx] = tuple(old_t_deltas)
++
++        vt = self.sess.run(self.tf_vt)
++        wt = self.sess.run(self.tf_wt)
++        bt = self.sess.run(self.tf_bt)
++
++        # TODO: This will break as soon as we move away from zeros
++        # as the initial state.
++        init_h = np.asarray([0] * self.num_hidden_states)
++
++        sampler_LL = []
++        sampler_loss = []
++
++        for idx in range(batch_size):
++            # TODO: Split based on the kind of intensity function.
++
++            # The seed doesn't make a difference because we will not
++            # take samples from this sampler, we will only ask it to
++            # calculate the square loss and the LL.
++            #
++            # TODO: This sampler needs to change from ExpCDFSampler to
++            # SigmoidCDFSampler.
++            sampler = ExpCDFSampler(vt=vt, wt=wt, bt=bt,
++                                    init_h=init_h,
++                                    t_min=batch_time_start[idx],
++                                    seed=42)
++            sampler_LL.append(
++                float(
++                    sampler.calc_LL(
++                        tf_t_deltas[idx][:tf_seq_len[idx]],
++                        tf_c_is[idx][:tf_seq_len[idx]],
++                        tf_is_own_event[idx][:tf_seq_len[idx]]
++                    )
++                )
++            )
++            sampler_loss.append(
++                (self.q / 2) *
++                float(
++                    sampler.calc_quad_loss(
++                        tf_t_deltas[idx][:tf_seq_len[idx]],
++                        tf_c_is[idx][:tf_seq_len[idx]]
++                    )
++                )
++            )
++
++        u = np.zeros((batch_size, times.shape[0]), dtype=float)
++
++        for batch_idx in range(batch_size):
++            abs_time = batch_time_start[idx]
++            abs_idx = 0
++            c = tf_c_is[batch_idx][0]
++
++            for time_idx, t in enumerate(times):
++                # We do not wish to update the c for the last survival interval.
++                # Hence, the -1 in len(tf_t_deltas[batch_idx] - 1
++                # while abs_idx < len(tf_t_deltas[batch_idx]) - 1 and abs_time + tf_t_deltas[batch_idx][abs_idx] < t:
++                while abs_idx < tf_seq_len[batch_idx] - 1 and abs_time + tf_t_deltas[batch_idx][abs_idx] < t:
++                    abs_time += tf_t_deltas[batch_idx][abs_idx]
++                    abs_idx += 1
++                    c = tf_c_is[batch_idx][abs_idx]
++
++                # TODO: Split based on the kind of intensity function.
++                u[batch_idx, time_idx] = np.exp(c + wt * (t - abs_time))
++
++        return {
++            'c_is': tf_c_is,
++            'is_own_event': tf_is_own_event,
++            't_deltas': tf_t_deltas,
++            'seq_len': tf_seq_len,
++
++            'vt': vt,
++            'wt': wt,
++            'bt': bt,
++
++            'LL': sampler_LL,
++            'loss': sampler_loss,
++
++            'times': times,
++            'u': u,
++        } 
++
++def get_feed_dict(teacher, scenarios, with_recall_probs=False, with_memorize_loss=False):
++    """Produce a feed_dict for the given list of scenarios."""
++
++    # assert all(df.sink_id.nunique() == 1 for df in batch_df), "Can only handle one sink at the moment."
++
++    batch_size = len(scenarios)
++    max_events = max(s.get_num_events() for s in scenarios)
++    num_items = scenarios[0].num_items 
++
++    full_shape = (batch_size, max_events)
++
++    batch_rewards = np.asarray([
++                -REWARD_SCALING * s.work_recalls() for s in scenarios
++            ])[:, np.newaxis]
++
++    # if with_memorize_loss:
++    #     batch_rewards = np.asarray([
++    #         s.get_m1_sq() for s in scenarios
++    #     ])[:, np.newaxis]
++    # else:
++    #     if not with_recall_probs:
++    #         batch_rewards = np.asarray([
++    #             -REWARD_SCALING * s.work_recalls() for s in scenarios
++    #         ])[:, np.newaxis]
++    #     else:
++    #         # We are exploiting the fact that we are training against a simulator.
++    #         #
++    #         # Will use this to investigate appropriate parameter space before
++    #         # switching to stochastic rewards.
++    #         batch_rewards = np.asarray([
++    #             -REWARD_SCALING * np.mean([s.student.recall(item, s.T + s.default_tau)
++    #                                        for item in range(num_items)])
++    #             for s in scenarios
++    #         ])[:, np.newaxis]
++
++    batch_last_interval = np.asarray([
++        s.get_last_interval() for s in scenarios
++    ], dtype=float)
++
++    batch_seq_len = np.asarray([
++        s.get_num_events() for s in scenarios
++    ], dtype=float)[:, np.newaxis]
++
++    batch_t_deltas = np.zeros(shape=full_shape, dtype=float)
++    batch_b_idxes = np.zeros(shape=full_shape, dtype=int)
++    batch_recalls = np.zeros(shape=full_shape, dtype=float)
++    batch_init_h = np.zeros(shape=(batch_size, teacher.num_hidden_states), dtype=float)
++
++    for idx, scen in enumerate(scenarios):
++        # They are sorted by time already.
++        batch_len = int(batch_seq_len[idx])
++
++        batch_recalls[idx, 0:batch_len] = scen.recalls
++        batch_b_idxes[idx, 0:batch_len] = scen.items
++        batch_t_deltas[idx, 0:batch_len] = scen.time_deltas
++
++    return {
++        teacher.tf_batch_b_idxes: batch_b_idxes,
++        teacher.tf_batch_rewards: batch_rewards,
++        teacher.tf_batch_seq_len: batch_seq_len,
++        teacher.tf_batch_t_deltas: batch_t_deltas,
++        teacher.tf_batch_recalls: batch_recalls,
++        teacher.tf_batch_init_h: batch_init_h,
++        teacher.tf_batch_last_interval: batch_last_interval,
++    }
++
++
++def mk_scenario_from_opts(teacher_opts, seed):
++    return Scenario(scenario_opts=teacher_opts.scenario_opts,
++                    seed=seed,
++                    Wh=teacher_opts.Wh,
++                    Wm=teacher_opts.Wm,
++                    Wr=teacher_opts.Wr,
++                    Wt=teacher_opts.Wt,
++                    Vy=teacher_opts.Vy,
++                    Bh=teacher_opts.Bh,
++
++                    vt=teacher_opts.vt,
++                    wt=teacher_opts.wt,
++                    bt=teacher_opts.bt,
++
++                    init_h=np.zeros((teacher_opts.num_hidden_states, 1)))
++
++
++def mk_scenario_from_teacher(teacher, seed, discretization=None, wt=None):
++    wt = teacher.sess.run(teacher.tf_wt) if wt is None else wt
++    return Scenario(scenario_opts=teacher.scenario_opts,
++                    seed=seed,
++                    Wh=teacher.sess.run(teacher.tf_Wh),
++                    Wm=teacher.sess.run(teacher.tf_Wm),
++                    Wr=teacher.sess.run(teacher.tf_Wr),
++                    Wt=teacher.sess.run(teacher.tf_Wt),
++                    Vy=teacher.sess.run(teacher.tf_Vy),
++                    Bh=teacher.sess.run(teacher.tf_Bh),
++
++                    vt=teacher.sess.run(teacher.tf_vt),
++                    wt=teacher.sess.run(teacher.tf_wt),
++                    bt=teacher.sess.run(teacher.tf_bt),
++
++                    init_h=np.zeros((teacher.num_hidden_states, 1)))
++
++
++def get_test_feed_dicts(teacher, seeds, **kwargs):
++    seeds = list(seeds)
++    scenarios = [mk_scenario_from_teacher(teacher, seed).run(max_events=MAX_EVENTS)
++                 for seed in seeds]
++    return (get_feed_dict(teacher, scenarios, **kwargs), scenarios)
++
++
++def run_scenario(teacher, seed):
++    return mk_scenario_from_teacher(teacher, seed).run(max_events=MAX_EVENTS)
++
++
++def _scenario_worker(scenario):
++    scenario.run()
++    return scenario
++
++
++# Baselines
++
++def uniform_baseline(scenario_opts, target_reviews, seed, verbose=True):
++    """Distribute target_reviews uniformly over the study period."""
++    student = mk_standard_student(scenario_opts, seed=seed * 2)
++    T = scenario_opts['T']
++    tau = scenario_opts['tau']
++
++    num_items = scenario_opts['alphas'].shape[0]
++    per_item_reviews = target_reviews / num_items
++    interval = T / per_item_reviews
++
++    reviews = 0
++    review_timings = []
++    for t in np.arange(0, T, interval):
++        for item in np.arange(num_items):
++            student.review(item, t)
++            review_timings.append((item, t))
++            reviews += 1
++
++    if verbose:
++        print('Total reviews = {}/{}'.format(reviews, target_reviews))
++
++    return {
++        'reward': -REWARD_SCALING * np.mean([student.recall(item, T + tau)
++                                             for item in range(num_items)]),
++        'student': student,
++        'num_reviews': reviews,
++        'review_timings': review_timings,
++    }
++
++
++def uniform_random_baseline(
++        scenario_opts, target_reviews,
++        seed, verbose=True
++):
++    """Distribute target_reviews uniformly over the study period."""
++    student = mk_standard_student(scenario_opts, seed=seed * 2)
++    num_items = len(scenario_opts['n_0s'])
++    T, tau = scenario_opts['T'], scenario_opts['tau']
++
++    RS = np.random.RandomState(seed)
++    num_random_reviews = RS.poisson(target_reviews)
++
++    items = RS.choice(np.arange(num_items),
++                      size=num_random_reviews,
++                      replace=True)
++    reviews_times = RS.uniform(size=num_random_reviews) * T
++
++    review_timings = []
++    for (item, t) in zip(items, reviews_times):
++        student.review(item, t)
++        review_timings.append((item, t))
++
++    if verbose:
++        print('Total reviews = {}/{}'
++              .format(num_random_reviews, target_reviews))
++
++    return {
++        'reward': -REWARD_SCALING * np.mean([student.recall(item, T + tau)
++                                             for item in range(num_items)]),
++        'student': student,
++        'num_reviews': num_random_reviews,
++        'review_timings': review_timings,
++    }
++
++
++# Memorize implementation
++
++def sample_memorize(q_max, forgetting_rate, RS):
++    dt = 0
++    while True:
++        dt += RS.exponential(scale=1.0 / q_max)
++        if RS.uniform() < 1 - np.exp(-forgetting_rate * dt):
++            return dt
++
++
++def memorize_baseline(scenario_opts, q_max, seed, verbose=True):
++    student = mk_standard_student(scenario_opts, seed=seed * 2)
++    num_items = scenario_opts['alphas'].shape[0]
++    T, tau = scenario_opts['T'], scenario_opts['tau']
++
++    reviews = []
++    RS = np.random.RandomState(seed=seed * 7)
++    for item in range(num_items):
++        next_t_delta = sample_memorize(
++            q_max, student.ns[item], RS
++        )
++        heapq.heappush(reviews, (next_t_delta, item))
++
++    num_reviews = 0
++    review_timings = []
++    while True:
++        (next_t, item) = heapq.heappop(reviews)
++        if next_t > T:
++            break
++
++        num_reviews += 1
++        student.review(item, next_t)
++        review_timings.append((item, next_t))
++        next_t_delta = sample_memorize(q_max, student.ns[item], RS)
++        heapq.heappush(reviews, (next_t + next_t_delta, item))
++
++    return {
++        'reward': - REWARD_SCALING * np.mean([
++            student.recall(item, T + tau) for item in range(num_items)
++        ]),
++        'num_reviews': num_reviews,
++        'student': student,
++        'review_timings': review_timings,
++        'm_2_reward': student.get_m1_sq(episode_end_time=T),
++    }
++
++
++# Sweeping q
++
++def calc_q_capacity_iter_memorize(
++        scenario_opts, q_suggested, verbose=False,
++        seeds=None, parallel=True, max_events=None
++):
++    if seeds is None:
++        seeds = range(250, 270)
++
++    num_reviews = [
++        memorize_baseline(scenario_opts, q_max=q_suggested,
++                          seed=x, verbose=verbose)['num_reviews']
++        for x in seeds
++    ]
++
++    return np.asarray(num_reviews)
++
++
++def sweep_memorize_q(scenario_opts, capacity_cap, q_init, tol=1e-2,
++                     verbose=False, parallel=True, max_events=None,
++                     max_iters=float('inf')):
++
++    # We know that on average, the ∫u(t)dt or number of events increases with
++    # increasing 'q'
++
++    def terminate_cond(new_capacity):
++        return abs(new_capacity - capacity_cap) / capacity_cap < tol or \
++            np.ceil(capacity_cap - 1) <= new_capacity <= np.ceil(capacity_cap + 1)
++
++    # Step 1: Find the upper/lower bound by exponential increase/decrease
++    init_cap = calc_q_capacity_iter_memorize(
++        scenario_opts,
++        q_init,
++        parallel=parallel,
++        max_events=max_events
++    ).mean()
++
++    if terminate_cond(init_cap):
++        return q_init
++
++    if verbose:
++        RU.logTime('Initial capacity = {}, target capacity = {}, q_init = {}'
++                   .format(init_cap, capacity_cap, q_init))
++
++    q = q_init
++    if init_cap < capacity_cap:
++        iters = 0
++        while True:
++            iters += 1
++            q_hi = q
++            q *= 2.0
++            q_lo = q
++            capacity = calc_q_capacity_iter_memorize(
++                scenario_opts, q,
++                parallel=parallel,
++                max_events=max_events
++            ).mean()
++            if verbose:
++                RU.logTime('q = {}, capacity = {}'.format(q, capacity))
++            if terminate_cond(capacity):
++                return q
++            if capacity >= capacity_cap:
++                break
++            if iters > max_iters:
++                if verbose:
++                    RU.logTime('Breaking because of max-iters: {}.'.format(max_iters))
++                return q
++    else:
++        iters = 0
++        while True:
++            iters += 1
++            q_lo = q
++            q /= 2.0
++            q_hi = q
++            capacity = calc_q_capacity_iter_memorize(
++                scenario_opts, q,
++                parallel=parallel,
++                max_events=max_events
++            ).mean()
++            if verbose:
++                RU.logTime('q = {}, capacity = {}'.format(q, capacity))
++            # Will break if capacity_cap is too low ~ 1 event,
++            # unless only_tol is True.
++            if terminate_cond(capacity):
++                return q
++            if capacity <= capacity_cap:
++                break
++            if iters > max_iters:
++                if verbose:
++                    RU.logTime('Breaking because of max-iters: {}.'.format(max_iters))
++                return q
++
++    if verbose:
++        RU.logTime('q_hi = {}, q_lo = {}'.format(q_hi, q_lo))
++
++    # Step 2: Keep bisecting on 's' until we arrive at a close enough solution.
++    while True:
++        q = (q_hi + q_lo) / 2.0
++        new_capacity = calc_q_capacity_iter_memorize(
++            scenario_opts, q,
++            parallel=parallel,
++            max_events=max_events
++        ).mean()
++
++        if verbose:
++            RU.logTime('new_capacity = {}, q = {}'.format(new_capacity, q))
++
++        if terminate_cond(new_capacity):
++            # Have converged
++            break
++        elif new_capacity > capacity_cap:
++            q_lo = q
++        else:
++            q_hi = q
++
++    # Step 3: Return
++    return q
+diff -urN a/train-teaching.py b/train-teaching.py
+--- a/train-teaching.py
++++ b/train-teaching.py
+@@ -5,30 +5,36 @@
+ 
+ import click
+ import os
+-import tpprl.exp_teacher as ET
++import tpprl.exp_teacher_save as ET
+ from tpprl.utils import _now
+ import tensorflow as tf
+ import numpy as np
+ import sys
+ 
++#####################################
++"""Specifies the cmd input"""
++#####################################
++"""arguments are required and options optional, but with default values"""
+ 
+ @click.command()
+ @click.argument('initial_difficulty_csv', type=click.Path(exists=True))
+ @click.argument('alpha', type=float)
+ @click.argument('beta', type=float)
+ @click.argument('output_dir', type=click.Path())
+-@click.option('--epochs', 'epochs', help='How many epochs to train for.', default=1000, show_default=True)
+-@click.option('--num-iters', 'num_iters', help='How many iterations in each epoch.', default=50, show_default=True)
++@click.option('--epochs', 'epochs', help='How many epochs to train for.', default=8, show_default=True)
++@click.option('--num-iters', 'num_iters', help='How many iterations in each epoch.', default=28, show_default=True)
+ @click.option('--save-every', 'save_every', help='How many epochs to save a copy of the parameters to disk.', default=200, show_default=True)
+ @click.option('--T', 'T', help='The learning duration (in days).', default=14, show_default=True)
+ @click.option('--tau', 'tau', help='Delay before the test.', default=2, show_default=True)
+ @click.option('--with-summaries/--no-with-summaries', 'with_summaries', help='Whether to save summaries.', default=False, show_default=True)
+ @click.option('--summary-suffix', 'summary_suffix', help='Suffix to add to the summary directory', default='', show_default=True)
+ @click.option('--only-cpu/--no-only-cpu', 'only_cpu', help='Whether to use only the CPU for training.', default=True, show_default=True)
+-@click.option('--q', 'q', help='Weight for the intensity regularizer.', default=0.00025, show_default=True)
++@click.option('--q', 'q', help='Weight for the intensity regularizer.', default=0.005, show_default=True)
++# default=0.00025
+ @click.option('--q-entropy', 'q_entropy', help='Weight for the entropy regularizer.', default=0.002, show_default=True)
+-@click.option('--restore/--no-restore', 'should_restore', help='Whether to restore from the last save or overwrite the previous progress (if it exists).', default=True, show_default=True)
+-@click.option('--until', 'until', help='How many steps of iterations to run.', default=20000, show_default=True)
++@click.option('--restore/--no-restore', 'should_restore', help='Whether to restore from the last save or overwrite the previous progress (if it exists).', default=False, show_default=True)
++@click.option('--until', 'until', help='How many steps of iterations to run.', default=1250, show_default=True) 
++# refers to number of batches (not reviewing sequences): keep this relatively low above the actual number of interations !!!
+ @click.option('--with-mp/--no-with-mp', 'with_MP', help='Whether to use multiprocessing module to run simulations in parallel.', default=True, show_default=True)
+ @click.option('--with-recall-probs/--no-with-recall-probs', 'with_recall_probs', help='Whether to provide true probability of recall or only binary feedback to the agent.', default=False, show_default=True)
+ @click.option('--with-zero-wt/--no-with-zero-wt', 'with_zero_wt', help='Force wt to be zero.', default=False, show_default=True)
+@@ -39,10 +45,14 @@
+     """Read initial difficulty of items from INITIAL_DIFFICULTY_CSV, ALPHA and
+     BETA, train an optimal teacher and save the results to output_dir."""
+ 
++    """The above cmd() is apparently the order in which the parameters can be enterred in the cmd when executing the script
++        Here, the initial values from alpha and beta come from and initial_difficulty_csv is linked to the actual initial_difficulty.csv, the same for output_dir etc."""
++
+     with open(initial_difficulty_csv, 'r') as f:
+         n_0s = [float(x.strip()) for x in f.readline().split(',')]
+ 
+     num_items = len(n_0s)
++    """this corresponds to the different initial item difficulties"""
+ 
+     scenario_opts = {
+         'T': T,
+@@ -62,16 +72,16 @@
+         num_items=num_items,
+         hidden_dims=8,
+         learning_rate=0.02,
+-        decay_rate=0.02,
++        decay_rate=0.01,
+         summary_dir=summary_dir,
+         save_dir=save_dir,
+-        batch_size=32,
++        batch_size=12,
+         only_cpu=only_cpu,
+         T=T,
+         tau=tau,
+         q=q,
+         q_entropy=q_entropy,
+-        learning_bump=1.0,
++        learning_bump=1,
+         decay_steps=10,
+         scenario_opts=scenario_opts,
+         set_wt_zero=with_zero_wt,
+@@ -84,6 +94,7 @@
+     config.gpu_options.allow_growth = True
+ 
+     sess = tf.Session(config=config)
++
+     teacher = ET.ExpRecurrentTeacher(
+         _opts=teacher_opts,
+         sess=sess,
+@@ -131,6 +142,5 @@
+             )
+             break
+ 
+-
+ if __name__ == '__main__':
+     cmd()
