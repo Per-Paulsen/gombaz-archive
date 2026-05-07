@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2021 Per Paulsen
+Copyright (c) 2026 Per Paulsen
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -17,11 +17,4 @@ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-This license covers only the original code in this repository. The learner
-modifications under `learner/` are a derivative of the upstream repository
-`Networks-Learning/tpprl` (NeurIPS 2018), which carries no explicit license.
-For that reason this repository ships only a patch against the upstream code,
-not the upstream code itself. See `learner/README.md`.
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OF THE SOFTWARE.
