@@ -3,14 +3,14 @@
 > Archived snapshot of a 2021 product prototype, pitched at UnternehmerTUM
 > and to tech CEOs/CTOs in late 2021 / early 2022. No longer maintained.
 
-**ML-powered service-orchestration platform — automating SaaS business
+**ML-powered service-orchestration platform: automating SaaS business
 processes (pricing, marketing, subscriptions) where the model learns
 *when* to fire each call from observed data, instead of running on a
 fixed cron schedule.**
 
 ## The pitch in one paragraph
 
-Modern SaaS stacks chain API calls across providers — create a Stripe
+Modern SaaS stacks chain API calls across providers, e.g. create a Stripe
 coupon, derive a promotion code, push it into a Mailchimp campaign, send
 when subscribers are most likely to convert. Today this is hand-orchestrated
 through cron jobs and Zapier-style schedulers. GombaZ asked: what if the
@@ -23,8 +23,8 @@ that watches what users actually do.
 | Folder         | What it shows                                                                 |
 | ---            | ---                                                                           |
 | `docs/`        | The problem, an architecture sketch (BPMN), the conceptual idea.              |
-| `poc/`         | Working Airflow DAGs orchestrating Stripe + Mailchimp + Mandrill workflows — the "what gets scheduled". |
-| `learner/`     | A patch against [`Networks-Learning/tpprl`](https://github.com/Networks-Learning/tpprl) (NeurIPS 2018) adapting the spaced-repetition learner from "many items / human forgetting" to **one item / artificial information processes** — the "when to fire". |
+| `poc/`         | Working Airflow DAGs orchestrating Stripe + Mailchimp + Mandrill workflows: the "what gets scheduled". |
+| `learner/`     | A patch against [`Networks-Learning/tpprl`](https://github.com/Networks-Learning/tpprl) (NeurIPS 2018) adapting the spaced-repetition learner from "many items / human forgetting" to **one item / artificial information processes**: the "when to fire". |
 | `experiments/` | Plots from running the adapted learner against six different information processes (constant, random, shift, sqrt, square, step). |
 
 ## The story in three steps
